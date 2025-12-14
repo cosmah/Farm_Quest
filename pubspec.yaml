@@ -38,8 +38,18 @@ dependencies:
   # For saving game state persistently
   shared_preferences: ^2.2.2
   
-  # For playing sound effects
+  # For playing sound effects and music
   audioplayers: ^5.2.1
+  
+  # For SQLite database
+  sqflite: ^2.3.0
+  path_provider: ^2.1.0
+  
+  # For file picking (music files)
+  file_picker: ^8.0.0+1
+  
+  # For storage permissions
+  permission_handler: ^11.0.1
 
 dev_dependencies:
   flutter_test:
@@ -66,7 +76,6 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - assets/sounds/
     - assets/icon/logo.png
 
 # App Icon Configuration

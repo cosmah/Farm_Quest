@@ -4,6 +4,7 @@ import '../models/loan.dart';
 import 'farm_screen.dart';
 import 'shop_screen.dart';
 import 'bank_info_screen.dart';
+import 'music_screen.dart';
 
 class MainGameScreen extends StatefulWidget {
   final Loan? initialLoan;
@@ -34,6 +35,7 @@ class _MainGameScreenState extends State<MainGameScreen> {
       FarmScreen(gameService: _gameService),
       ShopScreen(gameService: _gameService),
       BankInfoScreen(gameService: _gameService),
+      const MusicScreen(),
     ];
   }
 
@@ -63,6 +65,10 @@ class _MainGameScreenState extends State<MainGameScreen> {
           BottomNavigationBarItem(
             icon: Text('🏦', style: TextStyle(fontSize: 24)),
             label: 'Bank',
+          ),
+          BottomNavigationBarItem(
+            icon: Text('🎵', style: TextStyle(fontSize: 24)),
+            label: 'Music',
           ),
         ],
         selectedItemColor: Colors.green.shade700,

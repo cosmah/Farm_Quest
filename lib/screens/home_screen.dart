@@ -83,24 +83,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   opacity: _fadeAnimation,
                   child: ScaleTransition(
                     scale: _scaleAnimation,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Game logo/title
-                        const Spacer(),
-                        _buildLogo(),
-                        const SizedBox(height: 40),
-                        _buildTitle(),
-                        const SizedBox(height: 20),
-                        _buildSubtitle(),
-                        const Spacer(),
-                        // Menu buttons
-                        _buildMenuButtons(),
-                        const SizedBox(height: 40),
-                        // Settings row
-                        _buildSettingsRow(),
-                        const SizedBox(height: 20),
-                      ],
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // Game logo/title
+                          const Spacer(),
+                          _buildLogo(),
+                          const SizedBox(height: 40),
+                          _buildTitle(),
+                          const SizedBox(height: 20),
+                          _buildSubtitle(),
+                          const Spacer(),
+                          // Menu buttons
+                          _buildMenuButtons(),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -240,46 +241,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildSettingsRow() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _SettingButton(
-            icon: _soundService.soundEnabled ? '🔊' : '🔇',
-            label: 'Sound',
-            isActive: _soundService.soundEnabled,
-            onPressed: () {
-              setState(() {
-                _soundService.setSoundEnabled(!_soundService.soundEnabled);
-              });
-              if (_soundService.soundEnabled) {
-                _soundService.buttonClickSound();
-              }
-            },
-          ),
-          const SizedBox(width: 20),
-          _SettingButton(
-            icon: _soundService.musicEnabled ? '🎵' : '🎵',
-            label: 'Music',
-            isActive: _soundService.musicEnabled,
-            onPressed: () {
-              setState(() {
-                _soundService.setMusicEnabled(!_soundService.musicEnabled);
-                if (_soundService.musicEnabled) {
-                  _soundService.playMusic('menu');
-                } else {
-                  _soundService.stopMusic();
-                }
-              });
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showHowToPlay() {
     showDialog(
       context: context,
@@ -382,55 +343,6 @@ class _MenuButton extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SettingButton extends StatelessWidget {
-  final String icon;
-  final String label;
-  final bool isActive;
-  final VoidCallback onPressed;
-
-  const _SettingButton({
-    required this.icon,
-    required this.label,
-    required this.isActive,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isActive
-              ? Colors.white.withValues(alpha: 0.9)
-              : Colors.white.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.5),
-            width: 2,
-          ),
-        ),
-        child: Column(
-          children: [
-            Text(icon, style: const TextStyle(fontSize: 24)),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isActive ? Colors.black87 : Colors.white70,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
