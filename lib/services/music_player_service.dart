@@ -66,6 +66,12 @@ class MusicPlayerService {
     }
   }
 
+  Future<void> clearPlaylist() async {
+    await _db.clearMusicLibrary();
+    await loadPlaylist();
+    await stop();
+  }
+
   Future<void> playSongAt(int index) async {
     if (index < 0 || index >= _playlist.length) return;
 

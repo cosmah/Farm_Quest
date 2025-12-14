@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/home_screen.dart';
+import 'services/music_player_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize music player service
+  await MusicPlayerService().initialize();
   
   // Lock orientation to portrait
   SystemChrome.setPreferredOrientations([

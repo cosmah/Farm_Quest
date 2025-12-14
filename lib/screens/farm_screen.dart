@@ -7,6 +7,7 @@ import '../models/crop_type.dart';
 import '../models/game_state.dart';
 import '../services/game_service.dart';
 import '../services/sound_service.dart';
+import '../services/music_player_service.dart';
 import '../widgets/plot_widget.dart';
 import 'game_over_screen.dart';
 
@@ -23,8 +24,10 @@ class FarmScreen extends StatefulWidget {
 class _FarmScreenState extends State<FarmScreen> with WidgetsBindingObserver {
   late GameService _gameService;
   final SoundService _soundService = SoundService();
+  final MusicPlayerService _musicPlayer = MusicPlayerService();
   Plot? _selectedPlot;
   StreamSubscription? _stateSubscription;
+  StreamSubscription? _musicStateSubscription;
   int _previousLevel = 1;
 
   @override
@@ -51,12 +54,18 @@ class _FarmScreenState extends State<FarmScreen> with WidgetsBindingObserver {
         setState(() {});
       }
     });
+
+    // Listen to music player state changes
+    _musicStateSubscription = _musicPlayer.stateStream.listen((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _stateSubscription?.cancel();
+    _musicStateSubscription?.cancel();
     super.dispose();
   }
 
@@ -214,6 +223,13 @@ class _FarmScreenState extends State<FarmScreen> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
+              ),
+            // Floating music controls (left side, middle)
+            if (_musicPlayer.playlist.isNotEmpty)
+              Positioned(
+                left: 8,
+                top: MediaQuery.of(context).size.height * 0.4,
+                child: _buildFloatingMusicControls(),
               ),
           ],
         ),
@@ -668,6 +684,37 @@ class _FarmScreenState extends State<FarmScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildFloatingMusicControls() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Previous button
+        _MusicControlButton(
+          icon: '⏮️',
+          onPressed: () => _musicPlayer.previous(),
+        ),
+        const SizedBox(height: 8),
+        // Play/Pause button
+        _MusicControlButton(
+          icon: _musicPlayer.isPlaying ? '⏸️' : '▶️',
+          onPressed: () {
+            if (_musicPlayer.isPlaying) {
+              _musicPlayer.pause();
+            } else {
+              _musicPlayer.play();
+            }
+          },
+        ),
+        const SizedBox(height: 8),
+        // Next button
+        _MusicControlButton(
+          icon: '⏭️',
+          onPressed: () => _musicPlayer.next(),
+        ),
+      ],
+    );
+  }
+
 }
 
 class _ActionButton extends StatelessWidget {
@@ -760,6 +807,50 @@ class _PlantSeedButton extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Music control button widget
+class _MusicControlButton extends StatelessWidget {
+  final String icon;
+  final VoidCallback onPressed;
+
+  const _MusicControlButton({
+    required this.icon,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.purple.withValues(alpha: 0.9),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: 56,
+            height: 56,
+            alignment: Alignment.center,
+            child: Text(
+              icon,
+              style: const TextStyle(fontSize: 28),
+            ),
+          ),
+        ),
       ),
     );
   }
