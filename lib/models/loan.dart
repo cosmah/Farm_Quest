@@ -5,6 +5,7 @@ class Loan {
   final DateTime takenAt; // When the loan was taken
   final int durationSeconds; // How long to repay
   bool isPaid;
+  int pausedTimeSeconds; // Total time the game was paused
 
   Loan({
     required this.principal,
@@ -12,31 +13,35 @@ class Loan {
     required this.takenAt,
     required this.durationSeconds,
     this.isPaid = false,
+    this.pausedTimeSeconds = 0,
   });
 
   /// Total amount to repay (principal + interest)
   int get totalAmount => (principal * (1 + interestRate)).round();
 
-  /// Time remaining to repay the loan
-  Duration get timeRemaining {
-    final deadline = takenAt.add(Duration(seconds: durationSeconds));
+  /// Time remaining to repay the loan (accounting for pause time)
+  Duration timeRemaining(int additionalPausedSeconds) {
+    final totalPaused = pausedTimeSeconds + additionalPausedSeconds;
+    final deadline = takenAt.add(Duration(seconds: durationSeconds + totalPaused));
     final now = DateTime.now();
     final remaining = deadline.difference(now);
     return remaining.isNegative ? Duration.zero : remaining;
   }
 
   /// Is the loan deadline passed?
-  bool get isOverdue => timeRemaining == Duration.zero;
+  bool isOverdue(int additionalPausedSeconds) => 
+      timeRemaining(additionalPausedSeconds) == Duration.zero;
 
   /// Progress of time elapsed (0.0 to 1.0)
-  double get timeProgress {
-    final elapsed = DateTime.now().difference(takenAt).inSeconds;
+  double timeProgress(int additionalPausedSeconds) {
+    final totalPaused = pausedTimeSeconds + additionalPausedSeconds;
+    final elapsed = DateTime.now().difference(takenAt).inSeconds - totalPaused;
     return (elapsed / durationSeconds).clamp(0.0, 1.0);
   }
 
   /// Formatted time remaining string
-  String get formattedTimeRemaining {
-    final duration = timeRemaining;
+  String formattedTimeRemaining(int additionalPausedSeconds) {
+    final duration = timeRemaining(additionalPausedSeconds);
     final minutes = duration.inMinutes;
     final seconds = duration.inSeconds % 60;
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
@@ -48,6 +53,7 @@ class Loan {
         'takenAt': takenAt.toIso8601String(),
         'durationSeconds': durationSeconds,
         'isPaid': isPaid,
+        'pausedTimeSeconds': pausedTimeSeconds,
       };
 
   factory Loan.fromJson(Map<String, dynamic> json) {
@@ -57,6 +63,7 @@ class Loan {
       takenAt: DateTime.parse(json['takenAt']),
       durationSeconds: json['durationSeconds'],
       isPaid: json['isPaid'] ?? false,
+      pausedTimeSeconds: json['pausedTimeSeconds'] ?? 0,
     );
   }
 

@@ -30,12 +30,13 @@ class Crop {
     this.isHarvested = false,
   });
 
-  CropState get state {
+  CropState getState(int pausedSeconds) {
     if (isDead) return CropState.dead;
     if (growthProgress >= 1.0 && !isHarvested) return CropState.ready;
 
     final now = DateTime.now();
-    final secondsSinceWatered = now.difference(lastWatered).inSeconds;
+    // Subtract paused time from elapsed time
+    final secondsSinceWatered = now.difference(lastWatered).inSeconds - pausedSeconds;
 
     // Check if wilting (10 seconds after needing water)
     if (secondsSinceWatered > type.waterIntervalSeconds + 10) {
@@ -49,6 +50,9 @@ class Crop {
 
     return CropState.growing;
   }
+  
+  // Backward compatibility - defaults to 0 pause
+  CropState get state => getState(0);
 
   String get emoji {
     if (isDead) return '💀';

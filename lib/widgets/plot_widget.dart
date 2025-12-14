@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/plot.dart';
 import '../models/crop.dart';
+import '../models/game_state.dart';
 import '../services/game_service.dart';
 
 class PlotWidget extends StatelessWidget {
@@ -130,15 +131,15 @@ class PlotWidget extends StatelessWidget {
             // Indicators
             if (crop != null) ...[
               // Water indicator
-              if (crop.state == CropState.needsWater ||
-                  crop.state == CropState.wilting)
+              if (crop.getState(gameService.currentPauseDuration) == CropState.needsWater ||
+                  crop.getState(gameService.currentPauseDuration) == CropState.wilting)
                 Positioned(
                   top: 8,
                   left: 8,
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: crop.state == CropState.wilting
+                      color: crop.getState(gameService.currentPauseDuration) == CropState.wilting
                           ? Colors.red
                           : Colors.blue,
                       shape: BoxShape.circle,
@@ -161,7 +162,7 @@ class PlotWidget extends StatelessWidget {
                   child: Text('🐛', style: TextStyle(fontSize: 20)),
                 ),
               // Ready indicator
-              if (crop.state == CropState.ready)
+              if (crop.getState(gameService.currentPauseDuration) == CropState.ready)
                 Positioned(
                   bottom: 8,
                   left: 8,
@@ -198,10 +199,10 @@ class PlotWidget extends StatelessWidget {
     if (plot.crop!.isDead) {
       return Colors.grey.shade600;
     }
-    if (plot.crop!.state == CropState.ready) {
+    if (plot.crop!.getState(gameService.currentPauseDuration) == CropState.ready) {
       return Colors.green.shade400;
     }
-    if (plot.crop!.state == CropState.wilting) {
+    if (plot.crop!.getState(gameService.currentPauseDuration) == CropState.wilting) {
       return Colors.brown.shade600;
     }
     return Colors.brown.shade300;

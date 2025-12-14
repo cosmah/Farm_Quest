@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/loan.dart';
 import '../services/game_service.dart';
-import 'farm_screen.dart';
+import 'main_game_screen.dart';
 
 class BankScreen extends StatelessWidget {
   final GameService? gameService;
@@ -147,7 +147,7 @@ class BankScreen extends StatelessWidget {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => FarmScreen(
+        builder: (context) => MainGameScreen(
           initialLoan: loan,
           gameService: gameService,
         ),

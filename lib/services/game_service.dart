@@ -15,17 +15,60 @@ class GameService {
   GameState _gameState = GameState.fresh();
   Timer? _gameLoopTimer;
   final Random _random = Random();
+  bool _isPaused = false;
+  DateTime? _pauseStartTime;
+  int _currentPauseSeconds = 0;
 
   final _stateController = StreamController<GameState>.broadcast();
   Stream<GameState> get stateStream => _stateController.stream;
 
   GameState get state => _gameState;
+  bool get isPaused => _isPaused;
 
   // Callbacks
   Function? onGameOver;
 
   GameService() {
     _startGameLoop();
+  }
+
+  /// Get current pause duration in seconds
+  int get currentPauseDuration {
+    if (_isPaused && _pauseStartTime != null) {
+      return DateTime.now().difference(_pauseStartTime!).inSeconds + _currentPauseSeconds;
+    }
+    return _currentPauseSeconds;
+  }
+
+  /// Pause the game (stops game loop and timer)
+  void pauseGame() {
+    if (!_isPaused) {
+      _isPaused = true;
+      _pauseStartTime = DateTime.now();
+      _gameLoopTimer?.cancel();
+      _notifyStateChanged();
+    }
+  }
+
+  /// Resume the game (restarts game loop)
+  void resumeGame() {
+    if (_isPaused && _pauseStartTime != null) {
+      final pauseDuration = DateTime.now().difference(_pauseStartTime!).inSeconds;
+      _currentPauseSeconds += pauseDuration;
+      
+      // Add pause time to game state
+      _gameState.totalPausedSeconds += pauseDuration;
+      
+      // Add pause time to active loan
+      if (_gameState.activeLoan != null) {
+        _gameState.activeLoan!.pausedTimeSeconds += pauseDuration;
+      }
+      
+      _isPaused = false;
+      _pauseStartTime = null;
+      _startGameLoop();
+      _notifyStateChanged();
+    }
   }
 
   /// Start the game loop (updates every second)
@@ -38,6 +81,11 @@ class GameService {
 
   /// Main game update logic
   void _updateGame() {
+    // Skip update if game is paused
+    if (_isPaused) {
+      return;
+    }
+    
     final now = DateTime.now();
     bool needsUpdate = false;
 
@@ -60,8 +108,8 @@ class GameService {
           needsUpdate = true;
         }
 
-        // Check if crop should die from lack of water
-        final secondsSinceWatered = now.difference(crop.lastWatered).inSeconds;
+        // Check if crop should die from lack of water (accounting for pause time)
+        final secondsSinceWatered = now.difference(crop.lastWatered).inSeconds - currentPauseDuration;
         if (secondsSinceWatered > crop.type.waterIntervalSeconds + 10) {
           if (!crop.isDead) {
             crop.isDead = true;
@@ -90,7 +138,7 @@ class GameService {
     }
 
     // Check loan deadline
-    if (_gameState.hasActiveLoan && _gameState.activeLoan!.isOverdue) {
+    if (_gameState.hasActiveLoan && _gameState.activeLoan!.isOverdue(currentPauseDuration)) {
       _triggerGameOver();
       return;
     }
@@ -166,6 +214,13 @@ class GameService {
       final crop = plot.crop!;
       _gameState.earnMoney(crop.type.sellPrice);
       _gameState.cropsHarvested++;
+      
+      // Award XP based on crop type
+      int xpReward = 10; // Base XP
+      if (crop.type.id == 'corn') xpReward = 15;
+      if (crop.type.id == 'tomato') xpReward = 20;
+      _gameState.addExperience(xpReward);
+      
       plot.clearCrop();
       _notifyStateChanged();
       saveGame();

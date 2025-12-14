@@ -13,6 +13,13 @@ class GameState {
   int loansRepaid;
   int cropsHarvested;
   
+  // Experience system
+  int experience;
+  int level;
+  
+  // Pause tracking
+  int totalPausedSeconds;
+  
   DateTime lastSaved;
 
   GameState({
@@ -23,6 +30,9 @@ class GameState {
     this.totalEarnings = 0,
     this.loansRepaid = 0,
     this.cropsHarvested = 0,
+    this.experience = 0,
+    this.level = 1,
+    this.totalPausedSeconds = 0,
     DateTime? lastSaved,
   })  : plots = plots ?? _createInitialPlots(),
         lastSaved = lastSaved ?? DateTime.now();
@@ -70,6 +80,22 @@ class GameState {
 
   bool canAfford(int cost) => money >= cost;
 
+  // Experience system
+  int get xpForNextLevel => level * 100; // 100 XP for level 2, 200 for level 3, etc.
+  double get xpProgress => experience / xpForNextLevel;
+
+  void addExperience(int xp) {
+    experience += xp;
+    _checkLevelUp();
+  }
+
+  void _checkLevelUp() {
+    while (experience >= xpForNextLevel) {
+      experience -= xpForNextLevel;
+      level++;
+    }
+  }
+
   Map<String, dynamic> toJson() => {
         'money': money,
         'plots': plots.map((p) => p.toJson()).toList(),
@@ -78,6 +104,9 @@ class GameState {
         'totalEarnings': totalEarnings,
         'loansRepaid': loansRepaid,
         'cropsHarvested': cropsHarvested,
+        'experience': experience,
+        'level': level,
+        'totalPausedSeconds': totalPausedSeconds,
         'lastSaved': lastSaved.toIso8601String(),
       };
 
@@ -95,6 +124,9 @@ class GameState {
       totalEarnings: json['totalEarnings'] ?? 0,
       loansRepaid: json['loansRepaid'] ?? 0,
       cropsHarvested: json['cropsHarvested'] ?? 0,
+      experience: json['experience'] ?? 0,
+      level: json['level'] ?? 1,
+      totalPausedSeconds: json['totalPausedSeconds'] ?? 0,
       lastSaved: json['lastSaved'] != null
           ? DateTime.parse(json['lastSaved'])
           : DateTime.now(),
@@ -111,6 +143,9 @@ class GameState {
       totalEarnings: 0,
       loansRepaid: 0,
       cropsHarvested: 0,
+      experience: 0,
+      level: 1,
+      totalPausedSeconds: 0,
     );
   }
 }

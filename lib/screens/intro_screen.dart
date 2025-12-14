@@ -26,16 +26,17 @@ class IntroScreen extends StatelessWidget {
               children: [
                 // Game title
                 const Text(
-                  '🌾',
+                  '🚜',
                   style: TextStyle(fontSize: 80),
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Farm From Scratch',
+                  'FARM QUEST',
                   style: TextStyle(
-                    fontSize: 36,
+                    fontSize: 38,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
+                    letterSpacing: 2,
                     shadows: [
                       Shadow(
                         blurRadius: 10.0,
@@ -43,6 +44,16 @@ class IntroScreen extends StatelessWidget {
                         offset: Offset(2, 2),
                       ),
                     ],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'The Farm Fun Game',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
                   ),
                   textAlign: TextAlign.center,
                 ),

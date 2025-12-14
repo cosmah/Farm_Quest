@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'screens/intro_screen.dart';
-import 'screens/farm_screen.dart';
-import 'services/game_service.dart';
+import 'screens/home_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,7 +20,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Farm From Scratch',
+      title: 'Farm Quest',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
@@ -49,34 +47,18 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _initialize() async {
-    final gameService = GameService();
-    
-    // Try to load saved game
-    final hasPlayedBefore = await gameService.hasPlayedBefore();
-    final loadedGame = await gameService.loadGame();
-
     // Small delay for splash effect
-    await Future.delayed(const Duration(seconds: 1));
+    await Future.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
 
-    if (hasPlayedBefore && loadedGame) {
-      // Return to farm with loaded game
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => FarmScreen(gameService: gameService),
-        ),
-      );
-    } else {
-      // First time - show intro
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const IntroScreen(),
-        ),
-      );
-    }
+    // Show home screen
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const HomeScreen(),
+      ),
+    );
   }
 
   @override
@@ -97,15 +79,17 @@ class _SplashScreenState extends State<SplashScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                '🌾',
-                style: TextStyle(fontSize: 100),
+              // Logo image
+              Image(
+                image: AssetImage('assets/icon/logo.png'),
+                width: 200,
+                height: 200,
               ),
               SizedBox(height: 24),
               Text(
-                'Farm From Scratch',
+                'Farm Quest',
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: 36,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                   shadows: [
@@ -115,6 +99,15 @@ class _SplashScreenState extends State<SplashScreen> {
                       offset: Offset(2, 2),
                     ),
                   ],
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'The Farm Fun Game',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.white70,
+                  fontStyle: FontStyle.italic,
                 ),
               ),
               SizedBox(height: 24),
