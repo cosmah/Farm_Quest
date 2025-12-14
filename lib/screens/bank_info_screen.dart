@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../models/loan.dart';
 import '../models/game_state.dart';
+import '../models/transaction.dart';
 import '../services/game_service.dart';
+import 'package:intl/intl.dart';
 
 class BankInfoScreen extends StatefulWidget {
   final GameService gameService;
@@ -15,6 +17,7 @@ class BankInfoScreen extends StatefulWidget {
 
 class _BankInfoScreenState extends State<BankInfoScreen> {
   StreamSubscription? _stateSubscription;
+  int _selectedTab = 0; // 0=Loan, 1=Finances, 2=Taxes
 
   @override
   void initState() {
@@ -33,10 +36,26 @@ class _BankInfoScreenState extends State<BankInfoScreen> {
   @override
   Widget build(BuildContext context) {
     final state = widget.gameService.state;
-    final hasLoan = state.hasActiveLoan;
-    final loan = state.activeLoan;
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('🏦 First Bank'),
+        backgroundColor: const Color(0xFF1A237E),
+        foregroundColor: Colors.white,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            color: Colors.white,
+            child: Row(
+              children: [
+                _buildTabButton(0, '💳 Loan'),
+                _buildTabButton(1, '📊 Finances'),
+                _buildTabButton(2, '🏛️ Taxes'),
+              ],
+            ),
+          ),
+        ),
+      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -48,312 +67,111 @@ class _BankInfoScreenState extends State<BankInfoScreen> {
             ],
           ),
         ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.95),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    const Text('🏦', style: TextStyle(fontSize: 40)),
-                    const SizedBox(width: 16),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'First Bank',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            'Manage your loans',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _buildMoneyDisplay(state),
-                  ],
-                ),
+        child: _buildSelectedTab(state),
+      ),
+    );
+  }
+
+  Widget _buildTabButton(int index, String label) {
+    final isSelected = _selectedTab == index;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _selectedTab = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: isSelected ? const Color(0xFF1A237E) : Colors.transparent,
+                width: 3,
               ),
-              // Content
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    // Bank manager
-                    Center(
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 100,
-                            height: 100,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.3),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 5),
-                                ),
-                              ],
-                            ),
-                            child: const Center(
-                              child: Text('🧑‍💼', style: TextStyle(fontSize: 60)),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.95),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Text(
-                              hasLoan
-                                  ? 'Welcome back! Pay off your loan to take a new one.'
-                                  : 'Ready to grow your farm? Choose a loan!',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontStyle: FontStyle.italic,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    // Active loan info
-                    if (hasLoan && loan != null) ...[
-                      _buildActiveLoanCard(loan, state),
-                      const SizedBox(height: 24),
-                    ],
-                    // Loan options
-                    if (!hasLoan) ...[
-                      const Text(
-                        'Available Loans',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildLoanOption(
-                        context,
-                        Loan.small(),
-                        'Small Loan',
-                        '💵',
-                        Colors.green,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildLoanOption(
-                        context,
-                        Loan.medium(),
-                        'Medium Loan',
-                        '💰',
-                        Colors.orange,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildLoanOption(
-                        context,
-                        Loan.large(),
-                        'Large Loan',
-                        '💎',
-                        Colors.red,
-                      ),
-                    ],
-                    // Loan history
-                    const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Your History',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildHistoryStat('🏦', 'Loans Repaid', '${state.loansRepaid}'),
-                          _buildHistoryStat('💰', 'Total Earnings', '\$${state.totalEarnings}'),
-                          _buildHistoryStat('⭐', 'Current Level', 'Level ${state.level}'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              color: isSelected ? const Color(0xFF1A237E) : Colors.grey,
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildMoneyDisplay(GameState state) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.green.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.green.shade300, width: 2),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('💰', style: TextStyle(fontSize: 20)),
-          const SizedBox(width: 6),
-          Text(
-            '\$${state.money}',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.green.shade700,
-            ),
-          ),
-        ],
-      ),
+  Widget _buildSelectedTab(GameState state) {
+    switch (_selectedTab) {
+      case 0:
+        return _buildLoanTab(state);
+      case 1:
+        return _buildFinancesTab(state);
+      case 2:
+        return _buildTaxesTab(state);
+      default:
+        return const SizedBox();
+    }
+  }
+
+  // LOAN TAB
+  Widget _buildLoanTab(GameState state) {
+    final hasLoan = state.hasActiveLoan;
+    final loan = state.activeLoan;
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (hasLoan) ...[
+          _buildLoanCard(loan!, state),
+          const SizedBox(height: 16),
+          _buildRepayButton(loan, state),
+        ] else
+          _buildNoLoanCard(),
+      ],
     );
   }
 
-  Widget _buildActiveLoanCard(Loan loan, GameState state) {
-    final canRepay = state.canAfford(loan.totalAmount);
+  Widget _buildLoanCard(Loan loan, GameState state) {
+    final timeLeft = loan.timeRemaining(widget.gameService.currentPauseDuration);
+    final hours = timeLeft.inHours;
+    final minutes = timeLeft.inMinutes % 60;
+    final seconds = timeLeft.inSeconds % 60;
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text('📄', style: TextStyle(fontSize: 32)),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'Active Loan',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: loan.timeRemaining(widget.gameService.currentPauseDuration).inSeconds < 60
-                      ? Colors.red
-                      : Colors.orange,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    const Text('⏰', style: TextStyle(fontSize: 16)),
-                    const SizedBox(width: 4),
-                    Text(
-                      loan.formattedTimeRemaining(widget.gameService.currentPauseDuration),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildLoanInfo('Principal', '\$${loan.principal}'),
-          _buildLoanInfo('Interest', '${(loan.interestRate * 100).toStringAsFixed(0)}%'),
-          _buildLoanInfo('Total to Repay', '\$${loan.totalAmount}'),
-          const SizedBox(height: 16),
-          LinearProgressIndicator(
-            value: loan.timeProgress(widget.gameService.currentPauseDuration),
-            backgroundColor: Colors.grey.shade300,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              loan.timeRemaining(widget.gameService.currentPauseDuration).inSeconds < 60 
-                  ? Colors.red 
-                  : Colors.orange,
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Active Loan',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            minHeight: 8,
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: canRepay
-                  ? () {
-                      widget.gameService.repayLoan();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('🎉 Loan repaid successfully!'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: Text(
-                canRepay
-                    ? '💵 Repay Loan (\$${loan.totalAmount})'
-                    : '❌ Not Enough Money',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+            const SizedBox(height: 16),
+            _buildLoanInfo('Principal', '\$${loan.principal}'),
+            _buildLoanInfo('Interest', '${(loan.interestRate * 100).toStringAsFixed(0)}%'),
+            _buildLoanInfo('Total to Repay', '\$${loan.totalAmount}'),
+            const SizedBox(height: 12),
+            const Text('Time Remaining:', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              '$hours h $minutes m $seconds s',
+              style: TextStyle(
+                fontSize: 24,
+                color: timeLeft.inSeconds < 60 ? Colors.red : Colors.orange,
+                fontWeight: FontWeight.bold,
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: loan.timeProgress(widget.gameService.currentPauseDuration),
+              backgroundColor: Colors.grey.shade300,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                timeLeft.inSeconds < 60 ? Colors.red : Colors.orange,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -364,99 +182,180 @@ class _BankInfoScreenState extends State<BankInfoScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade700,
+          Text(label, style: const TextStyle(fontSize: 16)),
+          Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRepayButton(Loan loan, GameState state) {
+    final canRepay = state.canAfford(loan.totalAmount);
+    return ElevatedButton(
+      onPressed: canRepay ? () => _repayLoan() : null,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: canRepay ? Colors.green : Colors.grey,
+        padding: const EdgeInsets.all(16),
+      ),
+      child: Text(
+        canRepay ? 'Repay Loan (\$${loan.totalAmount})' : 'Insufficient Funds',
+        style: const TextStyle(fontSize: 18, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _buildNoLoanCard() {
+    return Column(
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                const Text(
+                  '✅',
+                  style: TextStyle(fontSize: 60),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'No Active Loan',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'You have no outstanding loans!',
+                  style: TextStyle(color: Colors.grey.shade600),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton(
+          onPressed: () => _showLoanOptions(),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF1A237E),
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          ),
+          child: const Text(
+            '💰 Take New Loan',
+            style: TextStyle(fontSize: 18, color: Colors.white),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showLoanOptions() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Loan Amount'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildLoanOption(500, 0.1, 300),
+              _buildLoanOption(1000, 0.15, 600),
+              _buildLoanOption(2000, 0.2, 900),
+              _buildLoanOption(5000, 0.25, 1200),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildLoanOption(
-    BuildContext context,
-    Loan loan,
-    String title,
-    String emoji,
-    Color color,
-  ) {
-    return InkWell(
-      onTap: () {
-        _showLoanConfirmation(context, loan, title, emoji, color);
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
+  Widget _buildLoanOption(int principal, double interestRate, int durationSeconds) {
+    final interest = (principal * interestRate).round();
+    final total = principal + interest;
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        title: Text('\$$principal'),
+        subtitle: Text(
+          'Interest: ${(interestRate * 100).toStringAsFixed(0)}% • Total: \$$total\n'
+          'Duration: ${(durationSeconds / 60).round()} minutes',
+          style: const TextStyle(fontSize: 12),
         ),
-        child: Row(
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 40)),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                    ),
-                  ),
-                  Text(
-                    '\$${loan.principal}',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      _buildInfoChip('${(loan.interestRate * 100).toStringAsFixed(0)}% interest'),
-                      const SizedBox(width: 8),
-                      _buildInfoChip('${loan.durationSeconds ~/ 60} min'),
-                    ],
-                  ),
-                ],
+        trailing: ElevatedButton(
+          onPressed: () {
+            final loan = Loan(
+              principal: principal,
+              interestRate: interestRate,
+              durationSeconds: durationSeconds,
+              takenAt: DateTime.now(),
+            );
+            widget.gameService.takeLoan(loan);
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('💰 Loan of \$$principal approved!'),
+                backgroundColor: Colors.green,
               ),
+            );
+            setState(() {});
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          ),
+          child: const Text('Take', style: TextStyle(color: Colors.white)),
+        ),
+      ),
+    );
+  }
+
+  void _repayLoan() {
+    if (widget.gameService.repayLoan()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🎉 Loan repaid successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  // FINANCES TAB
+  Widget _buildFinancesTab(GameState state) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildFinanceSummaryCard(state),
+        const SizedBox(height: 16),
+        _buildTransactionsList(state),
+      ],
+    );
+  }
+
+  Widget _buildFinanceSummaryCard(GameState state) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Season ${state.currentSeason} Summary',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            Column(
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                const Text(
-                  'Repay',
-                  style: TextStyle(fontSize: 12),
-                ),
-                Text(
-                  '\$${loan.totalAmount}',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
+                _buildSummaryItem('💰 Income', '\$${state.seasonIncome}', Colors.green),
+                _buildSummaryItem('💸 Expenses', '\$${state.seasonExpenses}', Colors.red),
+                _buildSummaryItem('📈 Net', '\$${state.seasonIncome - state.seasonExpenses}', 
+                  state.seasonIncome >= state.seasonExpenses ? Colors.green : Colors.red),
               ],
             ),
           ],
@@ -465,132 +364,186 @@ class _BankInfoScreenState extends State<BankInfoScreen> {
     );
   }
 
-  Widget _buildInfoChip(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade200,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
+  Widget _buildSummaryItem(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 14)),
+        Text(
+          value,
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTransactionsList(GameState state) {
+    final transactions = state.seasonTransactions;
+    
+    if (transactions.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'No transactions this season',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.all(8.0),
+          child: Text(
+            'Recent Transactions',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+        ),
+        ...transactions.take(20).map((transaction) => _buildTransactionCard(transaction)),
+      ],
+    );
+  }
+
+  Widget _buildTransactionCard(Transaction transaction) {
+    final isIncome = transaction.isIncome;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Text(transaction.emoji, style: const TextStyle(fontSize: 28)),
+        title: Text(transaction.description),
+        subtitle: Text(DateFormat('MMM d, h:mm a').format(transaction.timestamp)),
+        trailing: Text(
+          '${isIncome ? "+" : "-"}\$${transaction.amount}',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: isIncome ? Colors.green : Colors.red,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHistoryStat(String icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Text(icon, style: const TextStyle(fontSize: 20)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Colors.white70,
-              ),
-            ),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // TAXES TAB
+  Widget _buildTaxesTab(GameState state) {
+    final taxAmount = state.calculateTaxes();
+    final canPay = state.canAfford(taxAmount);
+    final taxesPaid = state.taxesPaidThisSeason;
 
-  void _showLoanConfirmation(
-    BuildContext context,
-    Loan loan,
-    String title,
-    String emoji,
-    Color color,
-  ) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Text(emoji),
-            const SizedBox(width: 12),
-            Text(title),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Are you sure you want to take this loan?',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Text('Amount: \$${loan.principal}'),
-            Text('Interest: ${(loan.interestRate * 100).toStringAsFixed(0)}%'),
-            Text('Total to Repay: \$${loan.totalAmount}'),
-            Text('Time Limit: ${loan.durationSeconds ~/ 60} minutes'),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Row(
-                children: [
-                  Text('⚠️', style: TextStyle(fontSize: 20)),
-                  SizedBox(width: 8),
-                  Expanded(
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '🏛️ Tax Information',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Season: ${state.currentSeason}',
+                  style: const TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Tax Rate: 15% of income',
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                ),
+                const Divider(height: 32),
+                _buildLoanInfo('Season Income', '\$${state.seasonIncome}'),
+                _buildLoanInfo('Tax Amount (15%)', '\$${taxAmount}'),
+                const SizedBox(height: 16),
+                if (taxesPaid)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green),
+                    ),
+                    child: const Row(
+                      children: [
+                        Text('✅', style: TextStyle(fontSize: 24)),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Taxes paid for this season!',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  ElevatedButton(
+                    onPressed: canPay ? () => _payTaxes(taxAmount) : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: canPay ? const Color(0xFF1A237E) : Colors.grey,
+                      padding: const EdgeInsets.all(16),
+                    ),
                     child: Text(
-                      'Fail to repay = Game Over!',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      canPay ? 'Pay Taxes (\$${taxAmount})' : 'Insufficient Funds',
+                      style: const TextStyle(fontSize: 18, color: Colors.white),
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
-          ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              widget.gameService.takeLoan(loan);
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('$emoji Loan approved! \$${loan.principal} added to your account.'),
-                  backgroundColor: Colors.green,
+        const SizedBox(height: 16),
+        Card(
+          color: Colors.orange.shade50,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Text('💡', style: TextStyle(fontSize: 24)),
+                    SizedBox(width: 8),
+                    Text(
+                      'Tax Tips',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ],
                 ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: color,
-              foregroundColor: Colors.white,
+                const SizedBox(height: 12),
+                Text(
+                  '• Taxes are calculated per season\n'
+                  '• Pay before season ends to avoid penalties\n'
+                  '• Only income is taxed, not expenses\n'
+                  '• Tax resets each new season',
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade800),
+                ),
+              ],
             ),
-            child: const Text('Take Loan'),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
-}
 
+  void _payTaxes(int taxAmount) {
+    if (widget.gameService.state.payTaxes()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🏛️ Paid \$${taxAmount} in taxes for Season ${widget.gameService.state.currentSeason}!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      setState(() {});
+    }
+  }
+}

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/plot.dart';
 import '../models/crop.dart';
-import '../models/game_state.dart';
 import '../services/game_service.dart';
 
 class PlotWidget extends StatelessWidget {
@@ -130,12 +129,33 @@ class PlotWidget extends StatelessWidget {
             ),
             // Indicators
             if (crop != null) ...[
+              // Worker badge (top-left, priority position)
+              ...gameService.state.getWorkersManagingPlot(int.parse(plot.id)).map((worker) {
+                return Positioned(
+                  top: 4,
+                  left: 4,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: Text(worker.icon, style: const TextStyle(fontSize: 16)),
+                  ),
+                );
+              }).toList(),
               // Water indicator
               if (crop.getState(gameService.currentPauseDuration) == CropState.needsWater ||
                   crop.getState(gameService.currentPauseDuration) == CropState.wilting)
                 Positioned(
                   top: 8,
-                  left: 8,
+                  right: 8,
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
@@ -150,8 +170,8 @@ class PlotWidget extends StatelessWidget {
               // Weeds indicator
               if (crop.hasWeeds)
                 const Positioned(
-                  top: 8,
-                  right: 8,
+                  bottom: 8,
+                  left: 8,
                   child: Text('🌿', style: TextStyle(fontSize: 20)),
                 ),
               // Pests indicator
@@ -161,26 +181,29 @@ class PlotWidget extends StatelessWidget {
                   right: 8,
                   child: Text('🐛', style: TextStyle(fontSize: 20)),
                 ),
-              // Ready indicator
+              // Ready indicator (centered bottom)
               if (crop.getState(gameService.currentPauseDuration) == CropState.ready)
                 Positioned(
                   bottom: 8,
-                  left: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.green,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Text(
-                      '✓ Ready',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        '✓ Ready',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),

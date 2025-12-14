@@ -5,6 +5,7 @@ import '../models/plot.dart';
 import '../models/crop.dart';
 import '../models/crop_type.dart';
 import '../models/game_state.dart';
+import '../models/tool.dart';
 import '../services/game_service.dart';
 import '../services/sound_service.dart';
 import '../services/music_player_service.dart';
@@ -552,6 +553,110 @@ class _FarmScreenState extends State<FarmScreen> with WidgetsBindingObserver {
             ],
           ),
           const SizedBox(height: 12),
+          // Quick Tools section for live crops
+          if (plot.hasLiveCrop && crop != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.purple.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.purple.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '🛠️ Quick Tools',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _QuickToolButton(
+                        icon: '💧',
+                        label: 'Water Can',
+                        quantity: _gameService.state.getToolQuantity(ToolType.waterCan),
+                        onPressed: () {
+                          if (_gameService.useTool(ToolType.waterCan)) {
+                            _gameService.waterCrop(plot);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('💧 Used Water Can!'), duration: Duration(seconds: 1)),
+                            );
+                            setState(() {});
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('❌ No Water Cans! Buy from Tools Shop'), backgroundColor: Colors.red),
+                            );
+                          }
+                        },
+                      ),
+                      if (crop.hasWeeds)
+                        _QuickToolButton(
+                          icon: '🧴',
+                          label: 'Weed Killer',
+                          quantity: _gameService.state.getToolQuantity(ToolType.weedKiller),
+                          onPressed: () {
+                            if (_gameService.useTool(ToolType.weedKiller)) {
+                              _gameService.removeWeeds(plot);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('🧴 Used Weed Killer!'), duration: Duration(seconds: 1)),
+                              );
+                              setState(() {});
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('❌ No Weed Killer! Buy from Tools Shop'), backgroundColor: Colors.red),
+                              );
+                            }
+                          },
+                        ),
+                      if (crop.hasPests)
+                        _QuickToolButton(
+                          icon: '🧪',
+                          label: 'Pesticide',
+                          quantity: _gameService.state.getToolQuantity(ToolType.pesticide),
+                          onPressed: () {
+                            if (_gameService.useTool(ToolType.pesticide)) {
+                              _gameService.removePests(plot);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('🧪 Used Pesticide!'), duration: Duration(seconds: 1)),
+                              );
+                              setState(() {});
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('❌ No Pesticide! Buy from Tools Shop'), backgroundColor: Colors.red),
+                              );
+                            }
+                          },
+                        ),
+                      if (!crop.isDead && crop.growthProgress < 1.0)
+                        _QuickToolButton(
+                          icon: '🌸',
+                          label: 'Fertilizer',
+                          quantity: _gameService.state.getToolQuantity(ToolType.fertilizer),
+                          onPressed: () {
+                            if (_gameService.useTool(ToolType.fertilizer)) {
+                              crop.growthProgress = (crop.growthProgress * 1.5).clamp(0.0, 1.0);
+                              _gameService.saveGame();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('🌸 Fertilizer applied! 50% growth boost!'), backgroundColor: Colors.green),
+                              );
+                              setState(() {});
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('❌ No Fertilizer! Buy from Tools Shop'), backgroundColor: Colors.red),
+                              );
+                            }
+                          },
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (plot.isEmpty)
             Column(
               children: [
@@ -561,13 +666,15 @@ class _FarmScreenState extends State<FarmScreen> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 8),
                 ...CropType.allCrops.map((cropType) {
-                  final canAfford = _gameService.state.canAfford(cropType.seedCost);
+                  final hasSeeds = _gameService.state.hasSeeds(cropType.id, 1);
+                  final seedCount = _gameService.state.getSeedQuantity(cropType.id);
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: _PlantSeedButton(
                       cropType: cropType,
-                      canAfford: canAfford,
-                      onPressed: canAfford
+                      hasSeeds: hasSeeds,
+                      seedCount: seedCount,
+                      onPressed: hasSeeds
                           ? () {
                               if (_gameService.plantCrop(plot, cropType)) {
                                 _soundService.plantSound();
@@ -579,6 +686,13 @@ class _FarmScreenState extends State<FarmScreen> with WidgetsBindingObserver {
                                   ),
                                 );
                                 setState(() => _selectedPlot = null);
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('⚠️ No seeds available! Buy from shop.'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
                               }
                             }
                           : null,
@@ -756,12 +870,14 @@ class _ActionButton extends StatelessWidget {
 
 class _PlantSeedButton extends StatelessWidget {
   final CropType cropType;
-  final bool canAfford;
+  final bool hasSeeds;
+  final int seedCount;
   final VoidCallback? onPressed;
 
   const _PlantSeedButton({
     required this.cropType,
-    required this.canAfford,
+    required this.hasSeeds,
+    required this.seedCount,
     this.onPressed,
   });
 
@@ -770,7 +886,7 @@ class _PlantSeedButton extends StatelessWidget {
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: canAfford ? Colors.green : Colors.grey,
+        backgroundColor: hasSeeds ? Colors.green : Colors.grey,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         shape: RoundedRectangleBorder(
@@ -793,17 +909,26 @@ class _PlantSeedButton extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '${cropType.growthTimeSeconds}s → \$${cropType.sellPrice}',
+                  hasSeeds 
+                      ? '${cropType.growthTimeSeconds}s → \$${cropType.sellPrice}'
+                      : 'No seeds! Buy from shop',
                   style: const TextStyle(fontSize: 12),
                 ),
               ],
             ),
           ),
-          Text(
-            '\$${cropType.seedCost}',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: hasSeeds ? Colors.white.withValues(alpha: 0.3) : Colors.red.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '$seedCount',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -851,6 +976,58 @@ class _MusicControlButton extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// Quick tool button widget
+class _QuickToolButton extends StatelessWidget {
+  final String icon;
+  final String label;
+  final int quantity;
+  final VoidCallback onPressed;
+
+  const _QuickToolButton({
+    required this.icon,
+    required this.label,
+    required this.quantity,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasQuantity = quantity > 0;
+    
+    return ElevatedButton(
+      onPressed: hasQuantity ? onPressed : null,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: hasQuantity ? Colors.purple : Colors.grey.shade300,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(icon, style: const TextStyle(fontSize: 16)),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(fontSize: 12)),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: hasQuantity ? Colors.white.withValues(alpha: 0.3) : Colors.red.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              '$quantity',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
       ),
     );
   }
