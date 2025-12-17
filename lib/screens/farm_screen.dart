@@ -11,6 +11,7 @@ import '../services/sound_service.dart';
 import '../services/music_player_service.dart';
 import '../widgets/plot_widget.dart';
 import 'game_over_screen.dart';
+import 'player_profile_screen.dart';
 
 class FarmScreen extends StatefulWidget {
   final Loan? initialLoan;
@@ -176,57 +177,210 @@ class _FarmScreenState extends State<FarmScreen> with WidgetsBindingObserver {
                 child: Container(
                   color: Colors.black.withValues(alpha: 0.7),
                   child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          '⏸️',
-                          style: TextStyle(fontSize: 80),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'GAME PAUSED',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 400),
+                      margin: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.95),
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Everything is stopped',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white70,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            _gameService.resumeGame();
-                            setState(() {});
-                          },
-                          icon: const Text('▶️', style: TextStyle(fontSize: 24)),
-                          label: const Text(
-                            'Resume Game',
-                            style: TextStyle(fontSize: 18),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 32,
-                              vertical: 16,
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Icon
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade100,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Center(
+                              child: Text(
+                                '⏸️',
+                                style: TextStyle(fontSize: 40),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 20),
+                          // Title
+                          const Text(
+                            'GAME PAUSED',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Everything is stopped',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+                          // Resume Button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                _soundService.resumeSound();
+                                _gameService.resumeGame();
+                                setState(() {});
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 4,
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text('▶️', style: TextStyle(fontSize: 22)),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'Resume Game',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Profile Button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => PlayerProfileScreen(gameService: _gameService),
+                                  ),
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.purple,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 4,
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.person, size: 22),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'Profile & Leaderboard',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Back to Home Button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    title: const Row(
+                                      children: [
+                                        Icon(Icons.home, color: Colors.orange),
+                                        SizedBox(width: 12),
+                                        Text('Return to Home?'),
+                                      ],
+                                    ),
+                                    content: const Text(
+                                      'Your progress will be saved. You can continue later from the home screen.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () {
+                                          _gameService.saveGame();
+                                          Navigator.of(context).pop(); // Close dialog
+                                          // Navigate back to home screen, removing all routes
+                                          Navigator.of(context).pushNamedAndRemoveUntil(
+                                            '/',
+                                            (route) => false,
+                                          );
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.orange,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        child: const Text('Go Home'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 4,
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.home, size: 22),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'Back to Home',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            // Floating music controls (left side, middle)
-            if (_musicPlayer.playlist.isNotEmpty)
+            // Floating music controls (left side, middle) - only show when NOT paused
+            if (_musicPlayer.playlist.isNotEmpty && !isPaused)
               Positioned(
                 left: 8,
                 top: MediaQuery.of(context).size.height * 0.4,

@@ -239,21 +239,24 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             _showHowToPlay();
           },
         ),
-        const SizedBox(height: 24),
-        // Divider
-        Container(
-          width: 280,
-          height: 1,
-          color: Colors.white.withValues(alpha: 0.3),
-        ),
-        const SizedBox(height: 16),
-        // Google Sign-In Button
-        _GoogleSignInButton(
-          onPressed: () async {
-            _soundService.buttonClickSound();
-            _handleGoogleSignIn();
-          },
-        ),
+        // Show Google Sign-In only if NOT signed in
+        if (!_firebaseService.isSignedIn) ...[
+          const SizedBox(height: 24),
+          // Divider
+          Container(
+            width: 280,
+            height: 1,
+            color: Colors.white.withValues(alpha: 0.3),
+          ),
+          const SizedBox(height: 16),
+          // Google Sign-In Button
+          _GoogleSignInButton(
+            onPressed: () async {
+              _soundService.buttonClickSound();
+              _handleGoogleSignIn();
+            },
+          ),
+        ],
       ],
     );
   }
