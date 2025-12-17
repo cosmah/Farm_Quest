@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "585384686201",
+    "project_id": "wastemanager-b",
+    "storage_bucket": "wastemanager-b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:585384686201:android:f838cf450abc4ddcbf5aa8",
+        "android_client_info": {
+          "package_name": "com.farmgame.farm_from_scratch"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDH4Vk83s5RAyNxbLeGcxbJUsWkcMcXDEw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

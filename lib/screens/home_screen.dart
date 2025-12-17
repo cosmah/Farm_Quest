@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/game_service.dart';
 import '../services/sound_service.dart';
+import '../services/firebase_service.dart';
 import 'intro_screen.dart';
 import 'main_game_screen.dart';
 
@@ -13,6 +14,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   final SoundService _soundService = SoundService();
+  final FirebaseService _firebaseService = FirebaseService();
   late AnimationController _animController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
@@ -237,8 +239,114 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             _showHowToPlay();
           },
         ),
+        const SizedBox(height: 24),
+        // Divider
+        Container(
+          width: 280,
+          height: 1,
+          color: Colors.white.withValues(alpha: 0.3),
+        ),
+        const SizedBox(height: 16),
+        // Google Sign-In Button
+        _GoogleSignInButton(
+          onPressed: () async {
+            _soundService.buttonClickSound();
+            _handleGoogleSignIn();
+          },
+        ),
       ],
     );
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      ),
+    );
+
+    try {
+      final user = await _firebaseService.signInWithGoogle();
+      
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      if (user != null) {
+        // Success! Show confirmation and sync profile if there's a game
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Welcome, ${user.displayName ?? "Farmer"}!'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+
+          // If there's an existing game, offer to sync it
+          if (_hasExistingGame) {
+            final shouldSync = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('☁️ Cloud Sync'),
+                content: const Text(
+                  'Would you like to sync your current game progress to the cloud?',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Not Now'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Sync Now'),
+                  ),
+                ],
+              ),
+            );
+
+            if (shouldSync == true && mounted) {
+              final gameService = GameService();
+              await gameService.loadGame();
+              await _firebaseService.updatePlayerProfile(gameService.state);
+              
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('✅ Game synced to cloud!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            }
+          }
+        }
+      } else {
+        // User canceled or error occurred
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Google sign-in canceled'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Close loading dialog if still open
+      if (mounted) Navigator.pop(context);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Sign-in failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _showHowToPlay() {
@@ -391,6 +499,83 @@ class _HowToPlayItem extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Google Sign-In Button Widget
+class _GoogleSignInButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _GoogleSignInButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 280,
+      height: 56,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(28),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Google Icon
+                Image.network(
+                  'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+                  height: 24,
+                  width: 24,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade600,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'G',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Sign in with Google',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

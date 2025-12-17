@@ -23,6 +23,8 @@ class GameState {
   int totalEarnings;
   int loansRepaid;
   int cropsHarvested;
+  int daysPlayed;
+  DateTime gameStartDate;
   
   // Experience system
   int experience;
@@ -47,6 +49,8 @@ class GameState {
     this.totalEarnings = 0,
     this.loansRepaid = 0,
     this.cropsHarvested = 0,
+    this.daysPlayed = 0,
+    DateTime? gameStartDate,
     this.experience = 0,
     this.level = 1,
     this.totalPausedSeconds = 0,
@@ -56,6 +60,7 @@ class GameState {
         ownedTools = ownedTools ?? [],
         seedInventory = seedInventory ?? {},
         transactions = transactions ?? [],
+        gameStartDate = gameStartDate ?? DateTime.now(),
         lastTaxPayment = lastTaxPayment ?? DateTime.now(),
         lastSaved = lastSaved ?? DateTime.now();
 
@@ -92,6 +97,15 @@ class GameState {
   int get unlockedPlotsCount => plots.where((p) => p.isUnlocked).length;
 
   List<Plot> get unlockedPlots => plots.where((p) => p.isUnlocked).toList();
+  
+  // Compatibility getters
+  int get totalCropsHarvested => cropsHarvested;
+  
+  // Calculate XP needed for next level
+  int get experienceToNextLevel {
+    // Progressive XP requirements: 100, 250, 500, 1000, etc.
+    return 100 * level + (level * level * 50);
+  }
 
   void earnMoney(int amount, {TransactionCategory? category, String? description}) {
     money += amount;
@@ -326,6 +340,8 @@ class GameState {
         'totalEarnings': totalEarnings,
         'loansRepaid': loansRepaid,
         'cropsHarvested': cropsHarvested,
+        'daysPlayed': daysPlayed,
+        'gameStartDate': gameStartDate.toIso8601String(),
         'experience': experience,
         'level': level,
         'totalPausedSeconds': totalPausedSeconds,
@@ -363,6 +379,10 @@ class GameState {
       totalEarnings: json['totalEarnings'] ?? 0,
       loansRepaid: json['loansRepaid'] ?? 0,
       cropsHarvested: json['cropsHarvested'] ?? 0,
+      daysPlayed: json['daysPlayed'] ?? 0,
+      gameStartDate: json['gameStartDate'] != null
+          ? DateTime.parse(json['gameStartDate'])
+          : DateTime.now(),
       experience: json['experience'] ?? 0,
       level: json['level'] ?? 1,
       totalPausedSeconds: json['totalPausedSeconds'] ?? 0,
