@@ -527,11 +527,11 @@ class _FarmScreenState extends State<FarmScreen> with WidgetsBindingObserver {
                     const Text('⏰', style: TextStyle(fontSize: 16)),
                     const SizedBox(width: 4),
                     Text(
-                      loan.formattedTimeRemaining(_gameService.currentPauseDuration),
+                      loan.formattedTimeRemaining(_gameService.currentPauseSessionSeconds),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: loan.timeRemaining(_gameService.currentPauseDuration).inSeconds < 60
+                        color: loan.timeRemaining(_gameService.currentPauseSessionSeconds).inSeconds < 60
                             ? Colors.red
                             : Colors.orange,
                       ),
@@ -611,10 +611,10 @@ class _FarmScreenState extends State<FarmScreen> with WidgetsBindingObserver {
             SizedBox(
               height: 3,
               child: LinearProgressIndicator(
-                value: loan.timeProgress(_gameService.currentPauseDuration),
+                value: loan.timeProgress(_gameService.currentPauseSessionSeconds),
                 backgroundColor: Colors.grey.shade300,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  loan.timeRemaining(_gameService.currentPauseDuration).inSeconds < 60 
+                  loan.timeRemaining(_gameService.currentPauseSessionSeconds).inSeconds < 60 
                       ? Colors.red 
                       : Colors.orange,
                 ),
@@ -884,25 +884,38 @@ class _FarmScreenState extends State<FarmScreen> with WidgetsBindingObserver {
               },
             )
           else if (plot.hasLiveCrop) ...[
+            // Water button removed - use Quick Tools "Water Can" button instead (uses inventory)
             Row(
               children: [
                 Expanded(
-                  child:                   _ActionButton(
+                  child: _ActionButton(
                     icon: '💧',
-                    label: 'Water',
-                    color: crop!.getState(_gameService.currentPauseDuration) == CropState.needsWater ||
-                            crop.getState(_gameService.currentPauseDuration) == CropState.wilting
+                    label: 'Water (Use Water Can)',
+                    color: crop!.getState(_gameService.state.totalPausedSeconds) == CropState.needsWater ||
+                            crop.getState(_gameService.state.totalPausedSeconds) == CropState.wilting
                         ? Colors.blue
                         : Colors.grey,
                     onPressed: () {
-                      _soundService.waterSound();
-                      _gameService.waterCrop(plot);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('💧 Watered!'),
-                          duration: Duration(seconds: 1),
-                        ),
-                      );
+                      // Use Water Can from inventory
+                      if (_gameService.useTool(ToolType.waterCan)) {
+                        _soundService.waterSound();
+                        _gameService.waterCrop(plot);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('💧 Used Water Can!'),
+                            duration: Duration(seconds: 1),
+                          ),
+                        );
+                        setState(() {});
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('❌ No Water Cans! Buy from Tools Shop'),
+                            backgroundColor: Colors.red,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
                     },
                   ),
                 ),

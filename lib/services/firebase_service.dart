@@ -180,6 +180,53 @@ class FirebaseService {
     }
   }
 
+  /// Save full game state to cloud (complete backup)
+  Future<void> saveGameToCloud(GameState gameState) async {
+    if (!isSignedIn) return;
+
+    try {
+      await _firestoreInstance
+          .collection('game_saves')
+          .doc(currentUser!.uid)
+          .set({
+        ...gameState.toJson(),
+        'lastSynced': FieldValue.serverTimestamp(),
+      });
+
+      print('✅ Game saved to cloud');
+    } catch (e) {
+      print('❌ Error saving game to cloud: $e');
+      rethrow;
+    }
+  }
+
+  /// Load full game state from cloud
+  Future<GameState?> loadGameFromCloud() async {
+    if (!isSignedIn) return null;
+
+    try {
+      final doc = await _firestoreInstance
+          .collection('game_saves')
+          .doc(currentUser!.uid)
+          .get();
+
+      if (!doc.exists) {
+        print('⚠️ No cloud save found');
+        return null;
+      }
+
+      final data = doc.data()!;
+      // Remove server timestamp field before parsing
+      data.remove('lastSynced');
+
+      print('✅ Game loaded from cloud');
+      return GameState.fromJson(data);
+    } catch (e) {
+      print('❌ Error loading game from cloud: $e');
+      return null;
+    }
+  }
+
   /// Get current player profile
   Future<PlayerProfile?> getPlayerProfile() async {
     if (!isSignedIn) return null;

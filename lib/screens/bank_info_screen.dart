@@ -133,7 +133,8 @@ class _BankInfoScreenState extends State<BankInfoScreen> {
   }
 
   Widget _buildLoanCard(Loan loan, GameState state) {
-    final timeLeft = loan.timeRemaining(widget.gameService.currentPauseDuration);
+    // Use current pause session seconds (loan already has stored pausedTimeSeconds)
+    final timeLeft = loan.timeRemaining(widget.gameService.currentPauseSessionSeconds);
     final hours = timeLeft.inHours;
     final minutes = timeLeft.inMinutes % 60;
     final seconds = timeLeft.inSeconds % 60;
@@ -164,7 +165,7 @@ class _BankInfoScreenState extends State<BankInfoScreen> {
             ),
             const SizedBox(height: 8),
             LinearProgressIndicator(
-              value: loan.timeProgress(widget.gameService.currentPauseDuration),
+              value: loan.timeProgress(widget.gameService.currentPauseSessionSeconds),
               backgroundColor: Colors.grey.shade300,
               valueColor: AlwaysStoppedAnimation<Color>(
                 timeLeft.inSeconds < 60 ? Colors.red : Colors.orange,

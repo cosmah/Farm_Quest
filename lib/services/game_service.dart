@@ -10,6 +10,8 @@ import '../models/loan.dart';
 import '../models/worker.dart';
 import '../models/tool.dart';
 import '../models/transaction.dart';
+import 'offline_database_service.dart';
+import 'sync_service.dart';
 
 class GameService {
   static const String _saveKey = 'game_state';
@@ -17,10 +19,15 @@ class GameService {
 
   GameState _gameState = GameState.fresh();
   Timer? _gameLoopTimer;
+  Timer? _snapshotTimer; // Auto-snapshot every 5 seconds
   final Random _random = Random();
   bool _isPaused = false;
   DateTime? _pauseStartTime;
   int _currentPauseSeconds = 0;
+
+  // NEW: Offline-first storage services
+  final OfflineDatabaseService _offlineDb = OfflineDatabaseService();
+  final SyncService _syncService = SyncService();
 
   final _stateController = StreamController<GameState>.broadcast();
   Stream<GameState> get stateStream => _stateController.stream;
@@ -33,14 +40,128 @@ class GameService {
 
   GameService() {
     _startGameLoop();
+    _initializeServices();
+    _startAutoSnapshot();
   }
 
-  /// Get current pause duration in seconds
-  int get currentPauseDuration {
-    if (_isPaused && _pauseStartTime != null) {
-      return DateTime.now().difference(_pauseStartTime!).inSeconds + _currentPauseSeconds;
+  /// Initialize offline-first services
+  Future<void> _initializeServices() async {
+    await _syncService.initialize();
+    
+    // Listen to sync status
+    _syncService.syncStatusStream.listen((status) {
+      print('🔄 Sync status: $status');
+    });
+  }
+
+  /// Start automatic snapshot timer (every 5 seconds)
+  void _startAutoSnapshot() {
+    _snapshotTimer?.cancel();
+    _snapshotTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!_isPaused) {
+        _saveSnapshot();
+      }
+    });
+  }
+
+  /// Save complete game state snapshot (overwrites previous)
+  Future<void> _saveSnapshot() async {
+    try {
+      // Capture complete game state with all data
+      final snapshot = {
+        'gameState': _gameState.toJson(),
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'isPaused': _isPaused,
+        'pauseStartTime': _pauseStartTime?.millisecondsSinceEpoch,
+        'currentPauseSeconds': _currentPauseSeconds,
+        // Include all plots with complete crop states (growth progress, disasters, achievements)
+        'plots': _gameState.plots.map((plot) => plot.toJson()).toList(),
+        // Include all workers
+        'workers': _gameState.activeWorkers.map((worker) => {
+          'type': worker.type.name,
+          'hiredAt': worker.hiredAt.millisecondsSinceEpoch,
+          'assignedPlotIndices': worker.assignedPlotIndices,
+          'cost': worker.cost,
+        }).toList(),
+        // Include all tools
+        'tools': _gameState.ownedTools.map((tool) => {
+          'type': tool.type.name,
+          'quantityOwned': tool.quantityOwned,
+        }).toList(),
+        // Include seed inventory
+        'seedInventory': _gameState.seedInventory,
+        // Include transactions
+        'transactions': _gameState.transactions.map((t) => {
+          'type': t.type.toString().split('.').last,
+          'amount': t.amount,
+          'description': t.description,
+          'timestamp': t.timestamp.millisecondsSinceEpoch,
+          'seasonNumber': t.seasonNumber,
+          'category': t.category.toString().split('.').last,
+        }).toList(),
+        // Include active loan
+        'activeLoan': _gameState.activeLoan != null ? {
+          'principal': _gameState.activeLoan!.principal,
+          'interestRate': _gameState.activeLoan!.interestRate,
+          'durationSeconds': _gameState.activeLoan!.durationSeconds,
+          'takenAt': _gameState.activeLoan!.takenAt.millisecondsSinceEpoch,
+          'pausedTimeSeconds': _gameState.activeLoan!.pausedTimeSeconds,
+          'isPaid': _gameState.activeLoan!.isPaid,
+        } : null,
+      };
+
+      // Save snapshot (overwrites previous - PRIMARY KEY conflict resolution)
+      await _offlineDb.saveScreenState('game_snapshot', snapshot);
+      
+      // Also save full game state to main tables
+      await _offlineDb.saveGameState(_gameState);
+      
+    } catch (e) {
+      print('❌ Error saving snapshot: $e');
     }
-    return _currentPauseSeconds;
+  }
+
+  /// Load latest snapshot on game start
+  Future<bool> loadSnapshot() async {
+    try {
+      final snapshot = await _offlineDb.loadScreenState('game_snapshot');
+      if (snapshot == null) return false;
+
+      // Restore game state
+      _gameState = GameState.fromJson(snapshot['gameState'] as Map<String, dynamic>);
+      
+      // Restore pause state
+      _isPaused = snapshot['isPaused'] as bool? ?? false;
+      if (snapshot['pauseStartTime'] != null) {
+        _pauseStartTime = DateTime.fromMillisecondsSinceEpoch(snapshot['pauseStartTime'] as int);
+      }
+      _currentPauseSeconds = snapshot['currentPauseSeconds'] as int? ?? 0;
+
+      _notifyStateChanged();
+      print('✅ Snapshot loaded - resumed from exact state');
+      return true;
+    } catch (e) {
+      print('❌ Error loading snapshot: $e');
+      return false;
+    }
+  }
+
+  /// Get total pause duration (for UI display - uses GameState's totalPausedSeconds)
+  int get currentPauseDuration {
+    // Return total paused seconds from game state (includes all past pauses)
+    // If currently paused, add current pause session
+    if (_isPaused && _pauseStartTime != null) {
+      return _gameState.totalPausedSeconds + DateTime.now().difference(_pauseStartTime!).inSeconds;
+    }
+    return _gameState.totalPausedSeconds;
+  }
+
+  /// Get additional paused seconds for current pause session (for loan calculations)
+  int get currentPauseSessionSeconds {
+    if (_isPaused && _pauseStartTime != null) {
+      return DateTime.now().difference(_pauseStartTime!).inSeconds;
+    }
+    return 0;
   }
 
   /// Pause the game (stops game loop and timer)
@@ -49,6 +170,8 @@ class GameService {
       _isPaused = true;
       _pauseStartTime = DateTime.now();
       _gameLoopTimer?.cancel();
+      _snapshotTimer?.cancel(); // Stop auto-snapshot when paused
+      _saveSnapshot(); // Save final snapshot before pausing
       _notifyStateChanged();
     }
   }
@@ -70,6 +193,7 @@ class GameService {
       _isPaused = false;
       _pauseStartTime = null;
       _startGameLoop();
+      _startAutoSnapshot(); // Resume auto-snapshot
       _notifyStateChanged();
     }
   }
@@ -103,10 +227,11 @@ class GameService {
       if (plot.hasLiveCrop && plot.crop != null) {
         final crop = plot.crop!;
 
-        // Update growth progress
+        // Update growth progress (accounting for paused time)
         if (crop.growthProgress < 1.0 && !crop.isDead) {
-          final secondsSincePlanted = now.difference(crop.plantedAt).inSeconds;
-          double baseProgress = secondsSincePlanted / crop.type.growthTimeSeconds;
+          // Calculate game time (real time minus paused time)
+          final gameTimeSincePlanted = now.difference(crop.plantedAt).inSeconds - _gameState.totalPausedSeconds;
+          double baseProgress = gameTimeSincePlanted / crop.type.growthTimeSeconds;
 
           // Slow down if has weeds
           if (crop.hasWeeds) {
@@ -117,9 +242,10 @@ class GameService {
           needsUpdate = true;
         }
 
-        // Check if crop should die from lack of water (accounting for pause time)
-        final secondsSinceWatered = now.difference(crop.lastWatered).inSeconds - currentPauseDuration;
-        if (secondsSinceWatered > crop.type.waterIntervalSeconds + 10) {
+        // Check if crop should die from lack of water (accounting for paused time)
+        // Use game time, not real time
+        final gameTimeSinceWatered = now.difference(crop.lastWatered).inSeconds - _gameState.totalPausedSeconds;
+        if (gameTimeSinceWatered > crop.type.waterIntervalSeconds + 10) {
           if (!crop.isDead) {
             crop.isDead = true;
             needsUpdate = true;
@@ -150,10 +276,16 @@ class GameService {
       }
     }
 
-    // Check loan deadline
-    if (_gameState.hasActiveLoan && _gameState.activeLoan!.isOverdue(currentPauseDuration)) {
-      _triggerGameOver();
-      return;
+    // Check loan deadline (use total paused seconds, not current pause duration)
+    if (_gameState.hasActiveLoan) {
+      // Calculate additional paused seconds for current pause session
+      final additionalPaused = _isPaused && _pauseStartTime != null
+          ? DateTime.now().difference(_pauseStartTime!).inSeconds
+          : 0;
+      if (_gameState.activeLoan!.isOverdue(additionalPaused)) {
+        _triggerGameOver();
+        return;
+      }
     }
 
     // Auto-save every 10 updates (10 seconds)
@@ -440,36 +572,90 @@ class GameService {
     return _gameState.hasToolType(toolType);
   }
 
-  /// Save game state
+  /// Save game state (OFFLINE-FIRST: SQLite primary, Firebase sync every 5 minutes)
   Future<void> saveGame() async {
     _gameState.lastSaved = DateTime.now();
+    
+    // 1. Save to SQLite (primary storage - always fast)
+    await _offlineDb.saveGameState(_gameState);
+    
+    // 2. Also save to SharedPreferences for backward compatibility
     final prefs = await SharedPreferences.getInstance();
     final jsonString = jsonEncode(_gameState.toJson());
     await prefs.setString(_saveKey, jsonString);
     await prefs.setBool(_hasPlayedBeforeKey, true);
+    
+    // 3. Firebase sync happens automatically every 5 minutes via periodic timer
+    //    (No immediate sync - saves are fast and local)
+    
+    print('✅ Game saved to SQLite (primary storage)');
   }
 
-  /// Load game state
+  /// Load game state (OFFLINE-FIRST: Snapshot → SQLite → SharedPrefs → Firebase)
   Future<bool> loadGame() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString(_saveKey);
+    try {
+      // 1. PRIORITY: Try loading latest snapshot (most recent state)
+      final snapshotLoaded = await loadSnapshot();
+      if (snapshotLoaded) {
+        // Firebase sync happens automatically every 5 minutes via periodic timer
+        return true;
+      }
 
-    if (jsonString != null) {
-      try {
+      // 2. Fallback: Try loading from SQLite (primary storage)
+      final sqliteState = await _offlineDb.loadGameState();
+      
+      if (sqliteState != null) {
+        _gameState = sqliteState;
+        _notifyStateChanged();
+        print('✅ Game loaded from SQLite');
+        
+        // Firebase sync happens automatically every 5 minutes via periodic timer
+        return true;
+      }
+
+      // 3. Fallback: Try loading from SharedPreferences (legacy)
+      final prefs = await SharedPreferences.getInstance();
+      final jsonString = prefs.getString(_saveKey);
+
+      if (jsonString != null) {
         final json = jsonDecode(jsonString);
         _gameState = GameState.fromJson(json);
+        
+        // Migrate to SQLite
+        await _offlineDb.saveGameState(_gameState);
+        
         _notifyStateChanged();
+        print('✅ Game loaded from SharedPreferences (migrated to SQLite)');
         return true;
-      } catch (e) {
-        // Error loading game, will start fresh
-        return false;
       }
+
+      // 4. Fallback: Try loading from cloud (if signed in)
+      final cloudState = await _syncService.forceDownloadFromCloud();
+      if (cloudState) {
+        final loadedState = await _offlineDb.loadGameState();
+        if (loadedState != null) {
+          _gameState = loadedState;
+          _notifyStateChanged();
+          print('✅ Game loaded from cloud');
+          return true;
+        }
+      }
+
+      print('⚠️ No saved game found');
+      return false;
+    } catch (e) {
+      print('❌ Error loading game: $e');
+      return false;
     }
-    return false;
   }
 
   /// Check if player has played before
   Future<bool> hasPlayedBefore() async {
+    // Check SQLite first
+    final hasSqliteData = await _offlineDb.hasGameState();
+    if (hasSqliteData) return true;
+
+    // Fallback to SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_hasPlayedBeforeKey) ?? false;
   }
@@ -477,9 +663,20 @@ class GameService {
   /// Reset game (after game over)
   Future<void> resetGame() async {
     _gameState = GameState.fresh();
+    await _offlineDb.deleteGameState();
     await saveGame();
     _notifyStateChanged();
     _startGameLoop();
+  }
+
+  /// Get sync info (for UI display)
+  Future<SyncInfo> getSyncInfo() async {
+    return await _syncService.getSyncInfo();
+  }
+
+  /// Force sync now (manual sync button)
+  Future<SyncResult> forceSyncNow() async {
+    return await _syncService.syncNow();
   }
 
   void _notifyStateChanged() {
@@ -488,7 +685,10 @@ class GameService {
 
   void dispose() {
     _gameLoopTimer?.cancel();
+    _snapshotTimer?.cancel();
+    _saveSnapshot(); // Final snapshot before dispose
     _stateController.close();
+    _syncService.dispose();
   }
 }
 

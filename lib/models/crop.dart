@@ -30,21 +30,21 @@ class Crop {
     this.isHarvested = false,
   });
 
-  CropState getState(int pausedSeconds) {
+  CropState getState(int totalPausedSeconds) {
     if (isDead) return CropState.dead;
     if (growthProgress >= 1.0 && !isHarvested) return CropState.ready;
 
     final now = DateTime.now();
-    // Subtract paused time from elapsed time
-    final secondsSinceWatered = now.difference(lastWatered).inSeconds - pausedSeconds;
+    // Subtract total paused time from elapsed time (game time, not real time)
+    final gameTimeSinceWatered = now.difference(lastWatered).inSeconds - totalPausedSeconds;
 
     // Check if wilting (10 seconds after needing water)
-    if (secondsSinceWatered > type.waterIntervalSeconds + 10) {
+    if (gameTimeSinceWatered > type.waterIntervalSeconds + 10) {
       return CropState.wilting;
     }
 
     // Check if needs water
-    if (secondsSinceWatered > type.waterIntervalSeconds) {
+    if (gameTimeSinceWatered > type.waterIntervalSeconds) {
       return CropState.needsWater;
     }
 
