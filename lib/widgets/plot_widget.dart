@@ -219,13 +219,16 @@ class PlotWidget extends StatelessWidget {
     if (plot.crop == null) {
       return Colors.brown.shade400;
     }
-    if (plot.crop!.isDead) {
+    final crop = plot.crop;
+    if (crop == null) return Colors.brown.shade400;
+    
+    if (crop.isDead) {
       return Colors.grey.shade600;
     }
-    if (plot.crop!.getState(gameService.state.totalPausedSeconds) == CropState.ready) {
+    if (crop.getState(gameService.state.totalPausedSeconds) == CropState.ready) {
       return Colors.green.shade400;
     }
-    if (plot.crop!.getState(gameService.state.totalPausedSeconds) == CropState.wilting) {
+    if (crop.getState(gameService.state.totalPausedSeconds) == CropState.wilting) {
       return Colors.brown.shade600;
     }
     return Colors.brown.shade300;

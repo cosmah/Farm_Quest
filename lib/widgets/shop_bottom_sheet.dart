@@ -69,7 +69,7 @@ class ShopBottomSheet extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           // Info message
-          if (selectedPlot == null || !selectedPlot!.isEmpty)
+          if (selectedPlot == null || !selectedPlot.isEmpty)
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -91,7 +91,7 @@ class ShopBottomSheet extends StatelessWidget {
             )
           else
             Text(
-              'Select a seed to plant on Plot ${int.parse(selectedPlot!.id) + 1}',
+              'Select a seed to plant on Plot ${selectedPlot != null ? int.parse(selectedPlot.id) + 1 : "?"}',
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.grey.shade600,
@@ -102,7 +102,7 @@ class ShopBottomSheet extends StatelessWidget {
           ...CropType.allCrops.map((cropType) {
             final canAfford = state.canAfford(cropType.seedCost);
             final canPlant = selectedPlot != null &&
-                selectedPlot!.isEmpty &&
+                selectedPlot.isEmpty &&
                 canAfford;
 
             return Padding(

@@ -149,6 +149,8 @@ class GameState {
   }
 
   void payLoan() {
+    // DEPRECATED: Use GameService.repayLoan() instead for proper transaction recording
+    // This method is kept for backward compatibility but should not be used
     if (activeLoan != null && money >= activeLoan!.totalAmount) {
       money -= activeLoan!.totalAmount;
       activeLoan!.isPaid = true;

@@ -18,6 +18,8 @@ class BankInfoScreen extends StatefulWidget {
 class _BankInfoScreenState extends State<BankInfoScreen> {
   StreamSubscription? _stateSubscription;
   int _selectedTab = 0; // 0=Loan, 1=Finances, 2=Taxes
+  bool _isProcessingLoan = false;
+  bool _isProcessingRepayment = false;
 
   @override
   void initState() {
@@ -315,14 +317,24 @@ class _BankInfoScreenState extends State<BankInfoScreen> {
     );
   }
 
-  void _repayLoan() {
-    if (widget.gameService.repayLoan()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🎉 Loan repaid successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+  void _repayLoan() async {
+    if (_isProcessingRepayment) return;
+    
+    setState(() => _isProcessingRepayment = true);
+    
+    try {
+      if (widget.gameService.repayLoan()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 Loan repaid successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessingRepayment = false);
+      }
     }
   }
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/game_state.dart';
 import '../models/crop.dart';
@@ -13,7 +14,7 @@ import '../models/transaction.dart';
 import 'offline_database_service.dart';
 import 'sync_service.dart';
 
-class GameService {
+class GameService with WidgetsBindingObserver {
   static const String _saveKey = 'game_state';
   static const String _hasPlayedBeforeKey = 'has_played_before';
 
@@ -39,9 +40,44 @@ class GameService {
   Function? onGameOver;
 
   GameService() {
-    _startGameLoop();
+    // Don't start game loop immediately - wait for proper initialization
+    WidgetsBinding.instance.addObserver(this);
     _initializeServices();
     _startAutoSnapshot();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    print('📱 App lifecycle changed to: $state');
+    
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+        // Auto-pause when app goes to background
+        print('📱 App backgrounded - saving and pausing game');
+        _saveSnapshot(); // Save immediately
+        saveGame(); // Also save via regular method
+        if (!_isPaused) {
+          pauseGame();
+          print('🔄 Game auto-paused (app backgrounded)');
+        }
+        break;
+      case AppLifecycleState.resumed:
+        // Don't auto-resume - let user manually resume
+        print('📱 App resumed - game remains paused');
+        break;
+      case AppLifecycleState.detached:
+        // Save before app termination
+        print('📱 App terminating - final save');
+        _saveSnapshot();
+        saveGame();
+        break;
+      case AppLifecycleState.hidden:
+        // App is hidden but not paused
+        print('📱 App hidden');
+        break;
+    }
   }
 
   /// Initialize offline-first services
@@ -52,6 +88,12 @@ class GameService {
     _syncService.syncStatusStream.listen((status) {
       print('🔄 Sync status: $status');
     });
+  }
+
+  /// Start the game (call after loading/resetting state)
+  void startGame() {
+    _startGameLoop();
+    print('✅ Game started with game loop running');
   }
 
   /// Start automatic snapshot timer (every 5 seconds)
@@ -67,47 +109,24 @@ class GameService {
   /// Save complete game state snapshot (overwrites previous)
   Future<void> _saveSnapshot() async {
     try {
-      // Capture complete game state with all data
+      print('🔄 Saving snapshot - Money: ${_gameState.money}, Loan: ${_gameState.activeLoan != null}, Plots: ${_gameState.plots.length}');
+      
+      // Capture COMPLETE game state - use the GameState's own toJson for consistency
+      final gameStateJson = _gameState.toJson();
+      
+      // Add GameService-specific state that's not in GameState
       final snapshot = {
-        'gameState': _gameState.toJson(),
+        'gameState': gameStateJson, // This contains ALL GameState data
         'timestamp': DateTime.now().millisecondsSinceEpoch,
         'isPaused': _isPaused,
         'pauseStartTime': _pauseStartTime?.millisecondsSinceEpoch,
         'currentPauseSeconds': _currentPauseSeconds,
-        // Include all plots with complete crop states (growth progress, disasters, achievements)
-        'plots': _gameState.plots.map((plot) => plot.toJson()).toList(),
-        // Include all workers
-        'workers': _gameState.activeWorkers.map((worker) => {
-          'type': worker.type.name,
-          'hiredAt': worker.hiredAt.millisecondsSinceEpoch,
-          'assignedPlotIndices': worker.assignedPlotIndices,
-          'cost': worker.cost,
-        }).toList(),
-        // Include all tools
-        'tools': _gameState.ownedTools.map((tool) => {
-          'type': tool.type.name,
-          'quantityOwned': tool.quantityOwned,
-        }).toList(),
-        // Include seed inventory
-        'seedInventory': _gameState.seedInventory,
-        // Include transactions
-        'transactions': _gameState.transactions.map((t) => {
-          'type': t.type.toString().split('.').last,
-          'amount': t.amount,
-          'description': t.description,
-          'timestamp': t.timestamp.millisecondsSinceEpoch,
-          'seasonNumber': t.seasonNumber,
-          'category': t.category.toString().split('.').last,
-        }).toList(),
-        // Include active loan
-        'activeLoan': _gameState.activeLoan != null ? {
-          'principal': _gameState.activeLoan!.principal,
-          'interestRate': _gameState.activeLoan!.interestRate,
-          'durationSeconds': _gameState.activeLoan!.durationSeconds,
-          'takenAt': _gameState.activeLoan!.takenAt.millisecondsSinceEpoch,
-          'pausedTimeSeconds': _gameState.activeLoan!.pausedTimeSeconds,
-          'isPaid': _gameState.activeLoan!.isPaid,
-        } : null,
+        // Add any GameService-specific data
+        'gameServiceState': {
+          'isPaused': _isPaused,
+          'pauseStartTime': _pauseStartTime?.millisecondsSinceEpoch,
+          'currentPauseSeconds': _currentPauseSeconds,
+        },
       };
 
       // Save snapshot (overwrites previous - PRIMARY KEY conflict resolution)
@@ -116,6 +135,7 @@ class GameService {
       // Also save full game state to main tables
       await _offlineDb.saveGameState(_gameState);
       
+      print('✅ Snapshot saved successfully - All data captured');
     } catch (e) {
       print('❌ Error saving snapshot: $e');
     }
@@ -124,11 +144,19 @@ class GameService {
   /// Load latest snapshot on game start
   Future<bool> loadSnapshot() async {
     try {
+      print('🔄 Attempting to load snapshot...');
       final snapshot = await _offlineDb.loadScreenState('game_snapshot');
-      if (snapshot == null) return false;
+      if (snapshot == null) {
+        print('⚠️ No snapshot found');
+        return false;
+      }
 
+      print('📦 Snapshot found, loading...');
+      
       // Restore game state
       _gameState = GameState.fromJson(snapshot['gameState'] as Map<String, dynamic>);
+      
+      print('✅ Game state restored - Money: ${_gameState.money}, Loan: ${_gameState.activeLoan != null}');
       
       // Restore pause state
       _isPaused = snapshot['isPaused'] as bool? ?? false;
@@ -215,6 +243,7 @@ class GameService {
     
     final now = DateTime.now();
     bool needsUpdate = false;
+    bool needsSave = false;
 
     // Worker auto-actions
     _performWorkerActions();
@@ -222,7 +251,7 @@ class GameService {
     // Permanent equipment effects
     _applyEquipmentEffects();
 
-    // Update all crops
+    // Update all crops (batch updates)
     for (var plot in _gameState.unlockedPlots) {
       if (plot.hasLiveCrop && plot.crop != null) {
         final crop = plot.crop!;
@@ -238,8 +267,11 @@ class GameService {
             baseProgress *= 0.5;
           }
 
-          crop.growthProgress = baseProgress.clamp(0.0, 1.0);
-          needsUpdate = true;
+          final newProgress = baseProgress.clamp(0.0, 1.0);
+          if ((newProgress - crop.growthProgress).abs() > 0.01) { // Only update if significant change
+            crop.growthProgress = newProgress;
+            needsUpdate = true;
+          }
         }
 
         // Check if crop should die from lack of water (accounting for paused time)
@@ -249,6 +281,7 @@ class GameService {
           if (!crop.isDead) {
             crop.isDead = true;
             needsUpdate = true;
+            needsSave = true;
           }
         }
 
@@ -256,6 +289,7 @@ class GameService {
         if (!crop.hasWeeds && !crop.isDead && _random.nextDouble() < crop.type.weedSpawnChance / 60) {
           crop.hasWeeds = true;
           needsUpdate = true;
+          needsSave = true;
         }
 
         // Random pest spawn - reduced by pest trap
@@ -266,6 +300,7 @@ class GameService {
         if (!crop.hasPests && !crop.isDead && _random.nextDouble() < pestChance) {
           crop.hasPests = true;
           needsUpdate = true;
+          needsSave = true;
         }
 
         // Pests kill crop after 15 seconds
@@ -288,11 +323,12 @@ class GameService {
       }
     }
 
-    // Auto-save every 10 updates (10 seconds)
-    if (DateTime.now().difference(_gameState.lastSaved).inSeconds >= 10) {
+    // Auto-save every 5 updates (5 seconds instead of 10) - but only if changes occurred
+    if (needsSave || DateTime.now().difference(_gameState.lastSaved).inSeconds >= 5) {
       saveGame();
     }
 
+    // Only notify UI if there were actual changes
     if (needsUpdate) {
       _notifyStateChanged();
     }
@@ -300,83 +336,91 @@ class GameService {
 
   /// Perform worker auto-actions
   void _performWorkerActions() {
-    // Farmhand: Auto-water crops that need water
-    if (_gameState.hasWorkerType(WorkerType.farmhand)) {
-      for (var plot in _gameState.unlockedPlots) {
-        if (plot.hasLiveCrop && plot.crop != null) {
-          final crop = plot.crop!;
-          final cropState = crop.getState(_gameState.totalPausedSeconds);
-          if (cropState == CropState.needsWater || cropState == CropState.wilting) {
-            waterCrop(plot);
+    try {
+      // Farmhand: Auto-water crops that need water
+      if (_gameState.hasWorkerType(WorkerType.farmhand)) {
+        for (var plot in _gameState.unlockedPlots) {
+          if (plot.hasLiveCrop && plot.crop != null) {
+            final crop = plot.crop!;
+            final cropState = crop.getState(_gameState.totalPausedSeconds);
+            if (cropState == CropState.needsWater || cropState == CropState.wilting) {
+              waterCrop(plot);
+            }
           }
         }
       }
-    }
 
-    // Pest Controller: Auto-remove pests
-    if (_gameState.hasWorkerType(WorkerType.pestController)) {
-      for (var plot in _gameState.unlockedPlots) {
-        if (plot.hasLiveCrop && plot.crop != null && plot.crop!.hasPests) {
-          removePests(plot);
+      // Pest Controller: Auto-remove pests
+      if (_gameState.hasWorkerType(WorkerType.pestController)) {
+        for (var plot in _gameState.unlockedPlots) {
+          if (plot.hasLiveCrop && plot.crop != null && plot.crop!.hasPests) {
+            removePests(plot);
+          }
         }
       }
-    }
 
-    // Gardener: Auto-remove weeds
-    if (_gameState.hasWorkerType(WorkerType.gardener)) {
-      for (var plot in _gameState.unlockedPlots) {
-        if (plot.hasLiveCrop && plot.crop != null && plot.crop!.hasWeeds) {
-          removeWeeds(plot);
+      // Gardener: Auto-remove weeds
+      if (_gameState.hasWorkerType(WorkerType.gardener)) {
+        for (var plot in _gameState.unlockedPlots) {
+          if (plot.hasLiveCrop && plot.crop != null && plot.crop!.hasWeeds) {
+            removeWeeds(plot);
+          }
         }
       }
-    }
 
-    // Supervisor & Master Farmer: Full plot management
-    for (var worker in _gameState.activeWorkers) {
-      if (worker.type == WorkerType.supervisor || worker.type == WorkerType.masterFarmer) {
-        final assignedPlots = worker.assignedPlotIndices ?? [];
-        for (var plotIndex in assignedPlots) {
-          if (plotIndex < _gameState.plots.length) {
-            final plot = _gameState.plots[plotIndex];
-            if (plot.isUnlocked && plot.hasLiveCrop && plot.crop != null) {
-              final crop = plot.crop!;
-              final cropState = crop.getState(_gameState.totalPausedSeconds);
-              
-              // Auto-water
-              if (cropState == CropState.needsWater || cropState == CropState.wilting) {
-                waterCrop(plot);
-              }
-              // Auto-remove pests
-              if (crop.hasPests) {
-                removePests(plot);
-              }
-              // Auto-remove weeds
-              if (crop.hasWeeds) {
-                removeWeeds(plot);
-              }
-              // Auto-harvest when ready
-              if (cropState == CropState.ready) {
-                harvestCrop(plot);
+      // Supervisor & Master Farmer: Full plot management
+      for (var worker in _gameState.activeWorkers) {
+        if (worker.type == WorkerType.supervisor || worker.type == WorkerType.masterFarmer) {
+          final assignedPlots = worker.assignedPlotIndices ?? [];
+          for (var plotIndex in assignedPlots) {
+            if (plotIndex < _gameState.plots.length) {
+              final plot = _gameState.plots[plotIndex];
+              if (plot.isUnlocked && plot.hasLiveCrop && plot.crop != null) {
+                final crop = plot.crop!;
+                final cropState = crop.getState(_gameState.totalPausedSeconds);
+                
+                // Auto-water
+                if (cropState == CropState.needsWater || cropState == CropState.wilting) {
+                  waterCrop(plot);
+                }
+                // Auto-remove pests
+                if (crop.hasPests) {
+                  removePests(plot);
+                }
+                // Auto-remove weeds
+                if (crop.hasWeeds) {
+                  removeWeeds(plot);
+                }
+                // Auto-harvest when ready
+                if (cropState == CropState.ready) {
+                  harvestCrop(plot);
+                }
               }
             }
           }
         }
       }
+    } catch (e) {
+      print('❌ Error in worker actions: $e');
     }
   }
 
   /// Apply permanent equipment effects
   void _applyEquipmentEffects() {
-    // Sprinkler: Auto-water all plots
-    if (_gameState.hasToolType(ToolType.sprinkler)) {
-      for (var plot in _gameState.unlockedPlots) {
-        if (plot.hasLiveCrop && plot.crop != null) {
-          final cropState = plot.crop!.getState(_gameState.totalPausedSeconds);
-          if (cropState == CropState.needsWater || cropState == CropState.wilting) {
-            waterCrop(plot);
+    try {
+      // Sprinkler: Auto-water all plots
+      if (_gameState.hasToolType(ToolType.sprinkler)) {
+        for (var plot in _gameState.unlockedPlots) {
+          if (plot.hasLiveCrop && plot.crop != null) {
+            final cropState = plot.crop!.getState(_gameState.totalPausedSeconds);
+            if (cropState == CropState.needsWater || cropState == CropState.wilting) {
+              waterCrop(plot);
+            }
           }
         }
       }
+    } catch (e) {
+      print('❌ Error in equipment effects: $e');
     }
   }
 
@@ -413,32 +457,47 @@ class GameService {
 
   /// Water a crop
   bool waterCrop(Plot plot) {
-    if (plot.hasLiveCrop && plot.crop != null) {
-      plot.crop!.lastWatered = DateTime.now();
-      _notifyStateChanged();
-      return true;
+    try {
+      if (plot.hasLiveCrop && plot.crop != null) {
+        plot.crop!.lastWatered = DateTime.now();
+        _notifyStateChanged();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('❌ Error watering crop: $e');
+      return false;
     }
-    return false;
   }
 
   /// Remove weeds from a crop
   bool removeWeeds(Plot plot) {
-    if (plot.hasLiveCrop && plot.crop != null && plot.crop!.hasWeeds) {
-      plot.crop!.hasWeeds = false;
-      _notifyStateChanged();
-      return true;
+    try {
+      if (plot.hasLiveCrop && plot.crop != null && plot.crop!.hasWeeds) {
+        plot.crop!.hasWeeds = false;
+        _notifyStateChanged();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('❌ Error removing weeds: $e');
+      return false;
     }
-    return false;
   }
 
   /// Remove pests from a crop
   bool removePests(Plot plot) {
-    if (plot.hasLiveCrop && plot.crop != null && plot.crop!.hasPests) {
-      plot.crop!.hasPests = false;
-      _notifyStateChanged();
-      return true;
+    try {
+      if (plot.hasLiveCrop && plot.crop != null && plot.crop!.hasPests) {
+        plot.crop!.hasPests = false;
+        _notifyStateChanged();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('❌ Error removing pests: $e');
+      return false;
     }
-    return false;
   }
 
   /// Harvest a crop
@@ -516,22 +575,34 @@ class GameService {
 
   /// Take a loan
   void takeLoan(Loan loan) {
+    print('💰 Taking loan: \$${loan.principal}');
+    
     _gameState.activeLoan = loan;
     _gameState.earnMoney(
       loan.principal,
       category: TransactionCategory.loanTaken,
       description: 'Loan: \$${loan.principal}',
     );
+    
+    print('💰 Loan taken - New money: \$${_gameState.money}');
+    
     _notifyStateChanged();
-    saveGame();
+    saveGame(); // Save immediately after taking loan
+    _saveSnapshot(); // Also save snapshot
+    
+    print('💾 Game saved after loan');
   }
 
   /// Repay the active loan
   bool repayLoan() {
     if (_gameState.hasActiveLoan && 
         _gameState.canAfford(_gameState.activeLoan!.totalAmount)) {
+      
+      // Prevent double-spending by checking again inside the transaction
+      final loanAmount = _gameState.activeLoan!.totalAmount;
+      
       if (_gameState.spendMoney(
-        _gameState.activeLoan!.totalAmount,
+        loanAmount,
         category: TransactionCategory.loanRepayment,
         description: 'Loan repayment with interest',
       )) {
@@ -574,46 +645,59 @@ class GameService {
 
   /// Save game state (OFFLINE-FIRST: SQLite primary, Firebase sync every 5 minutes)
   Future<void> saveGame() async {
-    _gameState.lastSaved = DateTime.now();
-    
-    // 1. Save to SQLite (primary storage - always fast)
-    await _offlineDb.saveGameState(_gameState);
-    
-    // 2. Also save to SharedPreferences for backward compatibility
-    final prefs = await SharedPreferences.getInstance();
-    final jsonString = jsonEncode(_gameState.toJson());
-    await prefs.setString(_saveKey, jsonString);
-    await prefs.setBool(_hasPlayedBeforeKey, true);
-    
-    // 3. Firebase sync happens automatically every 5 minutes via periodic timer
-    //    (No immediate sync - saves are fast and local)
-    
-    print('✅ Game saved to SQLite (primary storage)');
+    try {
+      print('💾 Saving game - Money: ${_gameState.money}, Loan: ${_gameState.activeLoan != null}');
+      
+      _gameState.lastSaved = DateTime.now();
+      
+      // 1. Save to SQLite (primary storage - always fast)
+      await _offlineDb.saveGameState(_gameState);
+      
+      // 2. Also save to SharedPreferences for backward compatibility
+      final prefs = await SharedPreferences.getInstance();
+      final jsonString = jsonEncode(_gameState.toJson());
+      await prefs.setString(_saveKey, jsonString);
+      await prefs.setBool(_hasPlayedBeforeKey, true);
+      
+      // 3. Firebase sync happens automatically every 5 minutes via periodic timer
+      //    (No immediate sync - saves are fast and local)
+      
+      print('✅ Game saved to SQLite and SharedPreferences');
+    } catch (e) {
+      print('❌ Error saving game: $e');
+    }
   }
 
   /// Load game state (OFFLINE-FIRST: Snapshot → SQLite → SharedPrefs → Firebase)
   Future<bool> loadGame() async {
     try {
+      print('🔄 Starting game load process...');
+      
       // 1. PRIORITY: Try loading latest snapshot (most recent state)
       final snapshotLoaded = await loadSnapshot();
       if (snapshotLoaded) {
+        print('✅ Loaded from snapshot');
         // Firebase sync happens automatically every 5 minutes via periodic timer
+        startGame(); // Start game loop after loading
         return true;
       }
 
       // 2. Fallback: Try loading from SQLite (primary storage)
+      print('🔄 Trying SQLite...');
       final sqliteState = await _offlineDb.loadGameState();
       
       if (sqliteState != null) {
         _gameState = sqliteState;
         _notifyStateChanged();
-        print('✅ Game loaded from SQLite');
+        print('✅ Game loaded from SQLite - Money: ${_gameState.money}');
         
         // Firebase sync happens automatically every 5 minutes via periodic timer
+        startGame(); // Start game loop after loading
         return true;
       }
 
       // 3. Fallback: Try loading from SharedPreferences (legacy)
+      print('🔄 Trying SharedPreferences...');
       final prefs = await SharedPreferences.getInstance();
       final jsonString = prefs.getString(_saveKey);
 
@@ -625,23 +709,26 @@ class GameService {
         await _offlineDb.saveGameState(_gameState);
         
         _notifyStateChanged();
-        print('✅ Game loaded from SharedPreferences (migrated to SQLite)');
+        print('✅ Game loaded from SharedPreferences - Money: ${_gameState.money} (migrated to SQLite)');
+        startGame(); // Start game loop after loading
         return true;
       }
 
       // 4. Fallback: Try loading from cloud (if signed in)
+      print('🔄 Trying cloud...');
       final cloudState = await _syncService.forceDownloadFromCloud();
       if (cloudState) {
         final loadedState = await _offlineDb.loadGameState();
         if (loadedState != null) {
           _gameState = loadedState;
           _notifyStateChanged();
-          print('✅ Game loaded from cloud');
+          print('✅ Game loaded from cloud - Money: ${_gameState.money}');
+          startGame(); // Start game loop after loading
           return true;
         }
       }
 
-      print('⚠️ No saved game found');
+      print('⚠️ No saved game found anywhere');
       return false;
     } catch (e) {
       print('❌ Error loading game: $e');
@@ -651,22 +738,40 @@ class GameService {
 
   /// Check if player has played before
   Future<bool> hasPlayedBefore() async {
-    // Check SQLite first
-    final hasSqliteData = await _offlineDb.hasGameState();
-    if (hasSqliteData) return true;
+    try {
+      // Check SQLite first
+      final hasSqliteData = await _offlineDb.hasGameState();
+      print('🔍 SQLite has data: $hasSqliteData');
+      
+      if (hasSqliteData) return true;
 
-    // Fallback to SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_hasPlayedBeforeKey) ?? false;
+      // Check for snapshot
+      final snapshot = await _offlineDb.loadScreenState('game_snapshot');
+      print('🔍 Snapshot exists: ${snapshot != null}');
+      
+      if (snapshot != null) return true;
+
+      // Fallback to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final hasSharedPrefs = prefs.getBool(_hasPlayedBeforeKey) ?? false;
+      print('🔍 SharedPreferences has data: $hasSharedPrefs');
+      
+      return hasSharedPrefs;
+    } catch (e) {
+      print('❌ Error checking if played before: $e');
+      return false;
+    }
   }
 
-  /// Reset game (after game over)
+  /// Reset game (after game over or for new game)
   Future<void> resetGame() async {
+    _gameLoopTimer?.cancel(); // Stop current game loop
     _gameState = GameState.fresh();
     await _offlineDb.deleteGameState();
     await saveGame();
     _notifyStateChanged();
-    _startGameLoop();
+    startGame(); // Start fresh game loop
+    print('✅ Game reset to fresh state');
   }
 
   /// Get sync info (for UI display)
@@ -684,6 +789,7 @@ class GameService {
   }
 
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _gameLoopTimer?.cancel();
     _snapshotTimer?.cancel();
     _saveSnapshot(); // Final snapshot before dispose

@@ -49,12 +49,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _checkExistingGame() async {
-    final gameService = GameService();
-    final hasPlayed = await gameService.hasPlayedBefore();
-    setState(() {
-      _hasExistingGame = hasPlayed;
-      _isLoading = false;
-    });
+    try {
+      final gameService = GameService();
+      final hasPlayed = await gameService.hasPlayedBefore();
+      setState(() {
+        _hasExistingGame = hasPlayed;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('❌ Error checking existing game: $e');
+      setState(() {
+        _hasExistingGame = false;
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -203,15 +211,51 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             onPressed: () async {
               _soundService.buttonClickSound();
               _soundService.stopMusic();
-              final gameService = GameService();
-              await gameService.loadGame();
-              if (context.mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => MainGameScreen(gameService: gameService),
-                  ),
-                );
+              
+              // Show loading
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
+              );
+              
+              try {
+                final gameService = GameService();
+                final loaded = await gameService.loadGame();
+                
+                // Close loading dialog
+                if (mounted) Navigator.pop(context);
+                
+                if (loaded && mounted) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MainGameScreen(gameService: gameService),
+                    ),
+                  );
+                } else if (mounted) {
+                  // Failed to load - show error and offer new game
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('❌ Failed to load saved game. Please start a new game.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              } catch (e) {
+                // Close loading dialog if still open
+                if (mounted) Navigator.pop(context);
+                
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('❌ Error loading game: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
               }
             },
           ),
@@ -220,9 +264,36 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           icon: '🎮',
           label: _hasExistingGame ? 'New Game' : 'Start Game',
           color: Colors.blue,
-          onPressed: () {
+          onPressed: () async {
             _soundService.buttonClickSound();
             _soundService.stopMusic();
+            
+            // For new games, show confirmation if there's an existing game
+            if (_hasExistingGame) {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('⚠️ New Game'),
+                  content: const Text(
+                    'Starting a new game will overwrite your current progress. Are you sure?',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      child: const Text('Start New Game'),
+                    ),
+                  ],
+                ),
+              );
+              
+              if (confirmed != true) return;
+            }
+            
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const IntroScreen()),

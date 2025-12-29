@@ -288,16 +288,17 @@ class OfflineDatabaseService {
 
       // Save crop if exists
       if (plot.crop != null) {
+        final crop = plot.crop!;
         batch.insert(
           'crops',
           {
             'plot_id': plot.id,
-            'crop_type': plot.crop!.type.name,
-            'planted_at': plot.crop!.plantedAt.millisecondsSinceEpoch,
+            'crop_type': crop.type.name,
+            'planted_at': crop.plantedAt.millisecondsSinceEpoch,
             'paused_seconds': 0, // Crop model doesn't have pausedSeconds
             'is_watered': 0, // Crop model doesn't track isWatered separately
-            'has_pests': plot.crop!.hasPests ? 1 : 0,
-            'has_weeds': plot.crop!.hasWeeds ? 1 : 0,
+            'has_pests': crop.hasPests ? 1 : 0,
+            'has_weeds': crop.hasWeeds ? 1 : 0,
             'fertilizer_used': 0, // Not in Crop model
             'lab_kit_used': 0, // Not in Crop model
             'last_updated': now,

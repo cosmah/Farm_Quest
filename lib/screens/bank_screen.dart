@@ -144,12 +144,14 @@ class BankScreen extends StatelessWidget {
   }
 
   void _selectLoan(BuildContext context, Loan loan) {
+    // For new games, we pass the loan but no game service
+    // This will trigger proper new game initialization in MainGameScreen
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (context) => MainGameScreen(
           initialLoan: loan,
-          gameService: gameService,
+          gameService: null, // Force new game initialization
         ),
       ),
     );
